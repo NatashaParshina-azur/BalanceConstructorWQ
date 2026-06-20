@@ -1396,15 +1396,16 @@ function funnelInit() {
   if (saved) { try { draftFunnel = JSON.parse(saved); } catch(e) { draftFunnel = [...liveFunnel]; } }
   else { draftFunnel = [...liveFunnel]; }
   // reset filters
-  poolFilterType = ''; poolFilterWr = ''; poolWrMin = 0; poolWrMax = 100;
+  poolFilterType = ''; poolFilterWr.clear(); poolWrMin = 0; poolWrMax = 100;
   poolFilterSubtype = ''; poolFilterComp = '';
   ['pf-subtype','pf-comp'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['pf-killer','pf-vhard','pf-hard-wr','pf-normal-wr','pf-easy-wr','pf-izzy-wr'].forEach(id => document.getElementById(id)?.classList.remove('pf-active'));
   document.getElementById('pf-all')?.classList.add('pf-active');
   renderPool(); renderLiveFunnel(); renderDraftFunnel(); updateFunnelMetrics();
 }
 
 let poolFilterType = '';
-let poolFilterWr = '';
+let poolFilterWr = new Set();   // multi-select set of WR category keys
 let poolFilterSubtype = '';
 let poolFilterComp = '';
 let poolWrMin = 0;    // 0–100
@@ -1426,18 +1427,24 @@ function onPoolWrRange() {
   }
   poolWrMin = mn; poolWrMax = mx;
   document.getElementById('pool-wr-range-label').textContent = `${mn}% – ${mx}%`;
-  // clear category WR button when using slider
-  poolFilterWr = '';
+  // clear category WR selection when using slider
+  poolFilterWr.clear();
   ['killer','vhard','hard-wr','normal-wr','easy-wr','izzy-wr','wr-all'].forEach(id =>
     document.getElementById('pf-'+id)?.classList.remove('pf-active'));
   renderPool();
 }
 
+const WR_BTN_ID = {killer:'killer',vhard:'vhard',hard:'hard-wr',normal:'normal-wr',easy:'easy-wr',izzy:'izzy-wr'};
+
 function setPoolFilter(dim, val) {
   if (dim === 'type') poolFilterType = val;
   if (dim === 'wr') {
-    poolFilterWr = val;
-    // reset range slider to full when using category buttons
+    if (val === '') {                       // ✕ сброс — clear all categories
+      poolFilterWr.clear();
+    } else {
+      if (poolFilterWr.has(val)) poolFilterWr.delete(val); else poolFilterWr.add(val);  // toggle (multi-select)
+    }
+    // categories take precedence over the slider → reset slider to full
     poolWrMin = 0; poolWrMax = 100;
     const minEl = document.getElementById('pool-wr-min');
     const maxEl = document.getElementById('pool-wr-max');
@@ -1454,12 +1461,8 @@ function setPoolFilter(dim, val) {
   const typeMap = {'':'all','basic':'basic','garage':'garage','conveyor':'conv','mixed':'mixed'};
   document.getElementById('pf-'+(typeMap[poolFilterType]||'all'))?.classList.add('pf-active');
 
-  // WR category group
-  ['killer','vhard','hard-wr','normal-wr','easy-wr','izzy-wr','wr-all'].forEach(id => {
-    document.getElementById('pf-'+id)?.classList.remove('pf-active');
-  });
-  const wrMap = {'killer':'killer','vhard':'vhard','hard':'hard-wr','normal':'normal-wr','easy':'easy-wr','izzy':'izzy-wr','':'wr-all'};
-  if(dim === 'wr' && wrMap[val] !== undefined) document.getElementById('pf-'+wrMap[val])?.classList.add('pf-active');
+  // WR category group — reflect the multi-select set
+  for(const k in WR_BTN_ID){ document.getElementById('pf-'+WR_BTN_ID[k])?.classList.toggle('pf-active', poolFilterWr.has(k)); }
 
   renderPool();
 }
@@ -1482,22 +1485,19 @@ function renderPool() {
   if (!pool) return;
   const inDraft = new Set(draftFunnel);
 
-  // Determine effective WR range: category button takes precedence over slider
-  let wrMin = 0, wrMax = 1;
-  if (poolFilterWr) {
-    const ranges = {killer:[0,.10],vhard:[.10,.30],hard:[.30,.50],normal:[.50,.70],easy:[.70,.90],izzy:[.90,1.01]};
-    [wrMin, wrMax] = ranges[poolFilterWr] || [0,1];
-  } else {
-    wrMin = poolWrMin/100; wrMax = poolWrMax/100;
-  }
-
-  const wrFilterActive = poolFilterWr || poolWrMin>0 || poolWrMax<100;
+  // WR filter: selected categories (multi-select, union) take precedence over the slider
+  const WR_RANGES = {killer:[0,.10],vhard:[.10,.30],hard:[.30,.50],normal:[.50,.70],easy:[.70,.90],izzy:[.90,1.01]};
+  const cats = [...poolFilterWr];
+  const useCats = cats.length > 0;
+  const sliderMin = poolWrMin/100, sliderMax = poolWrMax/100;
+  const wrFilterActive = useCats || poolWrMin>0 || poolWrMax<100;
   const filtered = LEVELS.filter(r => {
     if (poolFilterType && !(r.mechanics||[]).includes(poolFilterType)) return false;
     if (poolFilterSubtype && r.subtype !== poolFilterSubtype) return false;
     if (poolFilterComp && r.composition !== poolFilterComp) return false;
     if (r.botwr == null) { if (wrFilterActive) return false; }   // untested: only when no WR filter
-    else if (r.botwr < wrMin || r.botwr > wrMax) return false;
+    else if (useCats) { if (!cats.some(k => { const [a,b]=WR_RANGES[k]; return r.botwr>=a && r.botwr<b; })) return false; }
+    else if (r.botwr < sliderMin || r.botwr > sliderMax) return false;
     if (search && !r.name.toLowerCase().includes(search) && !String(r.n).includes(search)) return false;
     return true;
   });
