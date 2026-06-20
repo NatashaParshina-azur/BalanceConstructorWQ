@@ -374,6 +374,7 @@
           <th>Нитки <button class="sort-btn" onclick="sortBy('threads')">▲▼</button></th>
           <th>Bot WR <button class="sort-btn" onclick="sortBy('botwr')">▲▼</button></th>
           <th>Users WR <button class="sort-btn" onclick="sortBy('userswr')">▲▼</button></th>
+          <th style="white-space:nowrap">Попытки <button class="sort-btn" onclick="sortBy('tries')">▲▼</button></th>
           <th style="min-width:170px">Фичи</th>
         </tr></thead>
         <tbody id="levels-tbody"></tbody>
@@ -808,6 +809,7 @@ function parseSheetLevels(rows) {
   const iFeatures = idx('фичи');
   const iTarget   = headers.findIndex(h => h.includes('target') && !h.includes('diff')); // WR target (not "Diff target")
   const iDiffTarget = idx('diff target'); // target editorial difficulty per position
+  const iTry      = headers.findIndex(h => h.includes('avg_level_try') || h.includes('level_try')); // avg tries per level
   const iFreeze   = idx('freeze');
   const iKnock    = idx('knock');
   const iSubtype  = idx('subtype');
@@ -856,6 +858,10 @@ function parseSheetLevels(rows) {
     let diffTarget = '';
     if(iDiffTarget >= 0){ const dt = (r[iDiffTarget]||'').toLowerCase(); if(dt.includes('супер')||dt.includes('super')) diffTarget='Супер Сложный'; else if(dt.includes('сложн')||dt.includes('hard')) diffTarget='Сложный'; }
 
+    // avg tries per level from "avg_level_try" column → number or null
+    let tries = null;
+    if(iTry >= 0){ const t = parseFloat(String(r[iTry]).replace(',','.').trim()); if(!isNaN(t)) tries = t; }
+
     levels.push({
       n: Math.round(n),
       name:    iName    >= 0 ? r[iName]    : '',
@@ -863,6 +869,7 @@ function parseSheetLevels(rows) {
       mechanics,
       target,
       diffTarget,
+      tries,
       diff,
       s:       iS       >= 0 ? (parseFloat(r[iS])    || 0) : 0,
       m:       iM       >= 0 ? (parseFloat(r[iM])    || 0) : 0,
@@ -978,6 +985,7 @@ function levelRowHTML(r){
         <span class="${wrColor(r.botwr)}">${bwr}%</span>` : '<span style="color:var(--text3)">—</span>'}
       </td>
       <td><span class="${wrColor(r.userswr)}">${uwr!=null?uwr+'%':'—'}</span></td>
+      <td style="color:var(--text2)">${r.tries==null?'<span style="color:var(--text3)">—</span>':fmtTries(r.tries)}</td>
       <td style="font-size:11px"><div class="feat-cap" title="${String(r.features||'').replace(/"/g,'&quot;')}">${r.features ? `<span style="color:var(--accent)">${r.features}</span>` : '<span style="color:var(--text3)">—</span>'}</div></td>
     </tr>`;
 }
@@ -1020,6 +1028,7 @@ function levelsTableHTML(rows, sortable){
     <th>${sb('threads','Нитки')}</th>
     <th>${sb('botwr','Bot WR')}</th>
     <th>${sb('userswr','Users WR')}</th>
+    <th>${sb('tries','Попытки')}</th>
     <th style="min-width:170px">Фичи</th>
   </tr></thead><tbody>${rows.map(levelRowHTML).join('')}</tbody></table></div>`;
 }
@@ -1461,6 +1470,11 @@ function uwrSpan(r){
   const col = u==null ? 'var(--text3)' : (u>=.75?'#1D9E75':u>=.5?'#BA7517':'#E24B4A');
   return `<span class="fc-wr fc-wr-user" style="color:${col}" title="Users WR">${u!=null ? '🧑 '+Math.round(u*100)+'%' : '🧑 —'}</span>`;
 }
+// avg tries per level (from avg_level_try)
+function fmtTries(t){ return (t==null) ? '—' : (Number.isInteger(t) ? String(t) : t.toFixed(1)); }
+function triesSpan(r){
+  return `<span class="fc-wr fc-tries" title="Среднее попыток на уровень (avg_level_try)">🔁 ${fmtTries(r.tries)}</span>`;
+}
 
 function renderPool() {
   const search = document.getElementById('pool-search')?.value.toLowerCase() || '';
@@ -1506,7 +1520,7 @@ function renderPool() {
         ${edTag}
         ${atTag}
       </span>
-      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
+      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}
       <span class="fc-add" onclick="event.stopPropagation();addToDraft(${r.n})" title="Добавить в конец воронки">+</span>
     </div>`;
   }).join('') || '<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">Ничего не найдено</div>';
@@ -1599,7 +1613,7 @@ function renderDraftFunnel() {
         <span class="fc-hash" title="Номер уровня">#${r.n}</span>
         <span class="fc-name">${r.name}</span>
         <span style="display:flex;gap:2px;flex-shrink:0">${edTag}${atTag}</span>
-        <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
+        <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}
         <span class="fc-del" onclick="removeFromDraft(${i})" title="Убрать">✕</span>
       </div>
       ${annotCellHTML(pos)}
