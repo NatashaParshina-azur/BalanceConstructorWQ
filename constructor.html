@@ -96,6 +96,8 @@
 
   /* ── Main ── */
   .main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  /* On the funnel tab give more room so a wider bank doesn't squeeze the draft */
+  body:has(#tab-funnel.active) .main { max-width: 1400px; }
   .panel { display: none; } .panel.active { display: block; }
 
   /* ── Metrics ── */
