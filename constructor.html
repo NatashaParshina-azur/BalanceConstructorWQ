@@ -804,7 +804,8 @@ function parseSheetLevels(rows) {
   const iDiff     = idx('сложность');
   const iType     = idx('level type');
   const iFeatures = idx('фичи');
-  const iTarget   = idx('target');
+  const iTarget   = headers.findIndex(h => h.includes('target') && !h.includes('diff')); // WR target (not "Diff target")
+  const iDiffTarget = idx('diff target'); // target editorial difficulty per position
   const iFreeze   = idx('freeze');
   const iKnock    = idx('knock');
   const iSubtype  = idx('subtype');
@@ -849,12 +850,17 @@ function parseSheetLevels(rows) {
     let target = null;
     if(iTarget >= 0){ const t = parseFloat(String(r[iTarget]).replace('%','').trim()); if(!isNaN(t)) target = Math.max(0, Math.min(100, t<=1 ? Math.round(t*100) : Math.round(t))); }
 
+    // Target editorial difficulty from the "Diff target" column → 'Сложный' / 'Супер Сложный' / ''
+    let diffTarget = '';
+    if(iDiffTarget >= 0){ const dt = (r[iDiffTarget]||'').toLowerCase(); if(dt.includes('супер')||dt.includes('super')) diffTarget='Супер Сложный'; else if(dt.includes('сложн')||dt.includes('hard')) diffTarget='Сложный'; }
+
     levels.push({
       n: Math.round(n),
       name:    iName    >= 0 ? r[iName]    : '',
       type,
       mechanics,
       target,
+      diffTarget,
       diff,
       s:       iS       >= 0 ? (parseFloat(r[iS])    || 0) : 0,
       m:       iM       >= 0 ? (parseFloat(r[iM])    || 0) : 0,
@@ -1524,8 +1530,12 @@ function renderLiveFunnel() {
 
 // Annotation cell (landmarks + target) for a funnel position — keyed by position, not by level.
 function annotCellHTML(pos){
+  const dt = LEVELS[pos-1] && LEVELS[pos-1].diffTarget;   // target difficulty imported from "Diff target" column
+  const dtCol = dt==='Супер Сложный' ? '#E24B4A' : '#BA7517';
+  const dtChip = dt ? `<span class="fc-lm lm-imported" style="background:${dtCol}1f;color:${dtCol};border:0.5px dashed ${dtCol}88" title="Целевая сложность из листа (Diff target)">${dt}</span>` : '';
   return `<div class="draft-annot" title="Заметки для этой позиции — не перетаскиваются вместе с уровнем">
         <span class="fc-lmcell" ondragover="landmarkCellDragOver(event)" ondragleave="this.classList.remove('lm-over')" ondrop="landmarkDrop(event,${pos})">
+          ${dtChip}
           ${(funnelLandmarks[pos]||[]).map((lm,li)=>{
             const st = lm.c ? `background:${lm.c}1f;color:${lm.c};border:0.5px solid ${lm.c}55` : 'background:var(--accent-light);color:var(--accent)';
             const icon = (lm.t==='Сложный'||lm.t==='Супер Сложный') ? '' : '📍 ';
@@ -1552,6 +1562,7 @@ function scaffoldMax(){
   for(const k in funnelLandmarks){ if((funnelLandmarks[k]||[]).length) m = Math.max(m, +k); }
   for(const k in funnelTargets){ if(funnelTargets[k]!=null) m = Math.max(m, +k); }
   for(let i=LEVELS.length-1;i>=0;i--){ if(LEVELS[i].target!=null){ m = Math.max(m, i+1); break; } }
+  for(let i=LEVELS.length-1;i>=0;i--){ if(LEVELS[i].diffTarget){ m = Math.max(m, i+1); break; } }
   return m;
 }
 
