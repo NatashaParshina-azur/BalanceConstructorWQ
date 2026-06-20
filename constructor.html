@@ -266,6 +266,8 @@
   /* draft row = draggable level card + a separate (non-draggable) annotations field */
   .draft-row { display:flex; align-items:stretch; gap:8px; }
   .draft-row > .funnel-card { flex:1; min-width:0; }
+  .funnel-card.draft-empty { cursor:default; border-style:dashed; background:transparent; color:var(--text3); gap:8px; }
+  .draft-empty-hint { font-size:10px; color:var(--text3); opacity:.7; }
   .draft-annot { flex-shrink:0; width:300px; display:flex; align-items:center; gap:6px; padding:3px 8px; border:1px dashed var(--border2); border-radius:var(--r-md); background:var(--surface2); }
   .fc-lmcell { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:3px; align-items:center; align-self:stretch; }
   .fc-lmcell.lm-over { background:var(--accent-light); border-radius:6px; }
@@ -1520,23 +1522,58 @@ function renderLiveFunnel() {
   }).join('');
 }
 
+// Annotation cell (landmarks + target) for a funnel position — keyed by position, not by level.
+function annotCellHTML(pos){
+  return `<div class="draft-annot" title="Заметки для этой позиции — не перетаскиваются вместе с уровнем">
+        <span class="fc-lmcell" ondragover="landmarkCellDragOver(event)" ondragleave="this.classList.remove('lm-over')" ondrop="landmarkDrop(event,${pos})">
+          ${(funnelLandmarks[pos]||[]).map((lm,li)=>{
+            const st = lm.c ? `background:${lm.c}1f;color:${lm.c};border:0.5px solid ${lm.c}55` : 'background:var(--accent-light);color:var(--accent)';
+            const icon = (lm.t==='Сложный'||lm.t==='Супер Сложный') ? '' : '📍 ';
+            return `<span class="fc-lm has" draggable="true" style="${st}"
+               ondragstart="landmarkDragStart(event,${pos},${li})" ondragend="landmarkDragEnd()"
+               onclick="editLandmark(${pos},${li},event)" title="Клик — изменить/цвет · тащи — перенести">${icon}${lm.t}</span>`;
+          }).join('')}
+          <span class="fc-lm add lm-add-hard" onclick="event.stopPropagation();addLandmarkTag(${pos},'Сложный')" title="Добавить «Сложный»">С</span>
+          <span class="fc-lm add lm-add-shard" onclick="event.stopPropagation();addLandmarkTag(${pos},'Супер Сложный')" title="Добавить «Супер Сложный»">СС</span>
+          <span class="fc-lm add" onclick="addLandmark(${pos},event)" title="Свой ориентир (текст + цвет)">+</span>
+        </span>
+        <span class="fc-target" title="Таргетный WR для этой позиции (из столбца Target, можно переопределить)">
+          <input type="number" min="0" max="100" class="fc-target-inp" draggable="false"
+            value="${targetForPos(pos)??''}" placeholder="—" style="color:${tgtColor(targetForPos(pos))}"
+            onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="setTarget(${pos}, this)"><span class="fc-target-pct">%</span>
+        </span>
+      </div>`;
+}
+
+// Highest position that carries an annotation (manual landmark / manual target / imported Target column).
+// The draft renders at least this many rows so the orientation ladder is visible even before levels are placed.
+function scaffoldMax(){
+  let m = 0;
+  for(const k in funnelLandmarks){ if((funnelLandmarks[k]||[]).length) m = Math.max(m, +k); }
+  for(const k in funnelTargets){ if(funnelTargets[k]!=null) m = Math.max(m, +k); }
+  for(let i=LEVELS.length-1;i>=0;i--){ if(LEVELS[i].target!=null){ m = Math.max(m, i+1); break; } }
+  return m;
+}
+
 function renderDraftFunnel() {
   const el = document.getElementById('funnel-draft');
   if (!el) return;
-  if (!draftFunnel.length) {
+  const rowCount = Math.max(draftFunnel.length, scaffoldMax());
+  if (rowCount === 0) {
     el.innerHTML = '<div class="drop-hint">Перетащи уровни сюда из банка<br>или нажми + на плашке уровня</div>';
     document.getElementById('draft-count').textContent = '';
     updateFunnelChart(); updateFunnelBreakdown(); return;
   }
-  el.innerHTML = draftFunnel.map((n,i) => {
-    const r = LEVELS.find(x=>x.n===n); if(!r) return '';
-    const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
-    // highlight if position changed vs live
-    const livPos = liveFunnel.indexOf(n);
-    const changed = livPos !== i;
-    const edTag = diffCycleBadge(r.n, r.diff);
-    const atTag = autoWrBadge(r.botwr);
-    return `<div class="draft-row">
+  let html = '';
+  for(let i=0;i<rowCount;i++){
+    const pos = i+1;
+    if(i < draftFunnel.length){
+      const n = draftFunnel[i]; const r = LEVELS.find(x=>x.n===n); if(!r) continue;
+      const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
+      const changed = liveFunnel.indexOf(n) !== i;
+      const edTag = diffCycleBadge(r.n, r.diff);
+      const atTag = autoWrBadge(r.botwr);
+      html += `<div class="draft-row">
       <div class="funnel-card" draggable="true" data-idx="${i}" data-n="${n}"
         style="${changed?'border-left:2px solid var(--accent)':''}"
         ondragstart="draftDragStart(event,${i})"
@@ -1545,34 +1582,30 @@ function renderDraftFunnel() {
         ondragleave="this.style.borderTop=''"
         ondragend="draftDragEnd()">
         <span class="fc-handle">⠿</span>
-        <span class="draft-pos" title="Позиция в черновике">${i+1}</span>
+        <span class="draft-pos" title="Позиция в черновике">${pos}</span>
         <span class="fc-hash" title="Номер уровня">#${r.n}</span>
         <span class="fc-name">${r.name}</span>
         <span style="display:flex;gap:2px;flex-shrink:0">${edTag}${atTag}</span>
         <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
         <span class="fc-del" onclick="removeFromDraft(${i})" title="Убрать">✕</span>
       </div>
-      <div class="draft-annot" title="Заметки для этой позиции — не перетаскиваются вместе с уровнем">
-        <span class="fc-lmcell" ondragover="landmarkCellDragOver(event)" ondragleave="this.classList.remove('lm-over')" ondrop="landmarkDrop(event,${i+1})">
-          ${(funnelLandmarks[i+1]||[]).map((lm,li)=>{
-            const st = lm.c ? `background:${lm.c}1f;color:${lm.c};border:0.5px solid ${lm.c}55` : 'background:var(--accent-light);color:var(--accent)';
-            const icon = (lm.t==='Сложный'||lm.t==='Супер Сложный') ? '' : '📍 ';
-            return `<span class="fc-lm has" draggable="true" style="${st}"
-               ondragstart="landmarkDragStart(event,${i+1},${li})" ondragend="landmarkDragEnd()"
-               onclick="editLandmark(${i+1},${li},event)" title="Клик — изменить/цвет · тащи — перенести">${icon}${lm.t}</span>`;
-          }).join('')}
-          <span class="fc-lm add lm-add-hard" onclick="event.stopPropagation();addLandmarkTag(${i+1},'Сложный')" title="Добавить «Сложный»">С</span>
-          <span class="fc-lm add lm-add-shard" onclick="event.stopPropagation();addLandmarkTag(${i+1},'Супер Сложный')" title="Добавить «Супер Сложный»">СС</span>
-          <span class="fc-lm add" onclick="addLandmark(${i+1},event)" title="Свой ориентир (текст + цвет)">+</span>
-        </span>
-        <span class="fc-target" title="Таргетный WR для этой позиции (из столбца Target, можно переопределить)">
-          <input type="number" min="0" max="100" class="fc-target-inp" draggable="false"
-            value="${targetForPos(i+1)??''}" placeholder="—" style="color:${tgtColor(targetForPos(i+1))}"
-            onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="setTarget(${i+1}, this)"><span class="fc-target-pct">%</span>
-        </span>
-      </div>
+      ${annotCellHTML(pos)}
     </div>`;
-  }).join('');
+    } else {
+      // empty position slot — keeps the orientation ladder (landmarks/targets) visible for planning
+      html += `<div class="draft-row">
+      <div class="funnel-card draft-empty"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="dropOnDraft(event)">
+        <span class="draft-pos" title="Позиция">${pos}</span>
+        <span class="draft-empty-hint">— перетащи уровень —</span>
+      </div>
+      ${annotCellHTML(pos)}
+    </div>`;
+    }
+  }
+  el.innerHTML = html;
   document.getElementById('draft-count').textContent = draftFunnel.length+' уровней';
   updateFunnelChart(); updateFunnelMetrics(); updateFunnelBreakdown();
 }
