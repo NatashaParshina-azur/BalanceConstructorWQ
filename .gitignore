@@ -1,0 +1,7 @@
+# local dev tooling / Claude Code preview config
+.claude/
+# macOS
+.DS_Store
+# python
+__pycache__/
+*.pyc

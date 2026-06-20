@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wool Quest — Balance Constructor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: rgba(0,0,0,0.09);
+    --border2: rgba(0,0,0,0.15);
+    --text: #1a1a18;
+    --text2: #6b6b65;
+    --text3: #9a9a92;
+    --accent: #4a3fa8;
+    --accent-light: #eeedfe;
+    --green: #1D9E75;
+    --green-light: #E1F5EE;
+    --amber: #BA7517;
+    --amber-light: #FAEEDA;
+    --red: #A32D2D;
+    --red-light: #FCEBEB;
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --pink: #993556;
+    --pink-light: #FBEAF0;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181a;
+      --surface: #22222a;
+      --surface2: #2a2a34;
+      --border: rgba(255,255,255,0.09);
+      --border2: rgba(255,255,255,0.15);
+      --text: #f0efe9;
+      --text2: #9a9a92;
+      --text3: #6b6b65;
+      --accent-light: #26215C;
+      --green-light: #04342C;
+      --amber-light: #412402;
+      --red-light: #501313;
+      --blue-light: #042C53;
+      --pink-light: #4B1528;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border2);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -.02em; }
+  .logo span { color: var(--accent); }
+  .sync-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 5px 12px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: var(--r-md);
+    cursor: pointer; font-weight: 500; transition: opacity .15s;
+  }
+  .sync-btn:hover { opacity: .85; }
+  .sync-btn:disabled { opacity: .5; cursor: default; }
+  .sync-status { font-size: 11px; color: var(--text3); }
+  .config-btn {
+    font-size: 12px; padding: 5px 12px;
+    background: none; color: var(--text2);
+    border: 0.5px solid var(--border2); border-radius: var(--r-md);
+    cursor: pointer; transition: background .15s;
+  }
+  .config-btn:hover { background: var(--surface2); }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); padding: 0 24px; background: var(--surface); overflow-x: auto; }
+  .tab { padding: 10px 16px; font-size: 13px; border: none; background: none; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+  .tab:hover { color: var(--text); }
+  /* saved-funnel tabs — a separate group on the right */
+  .tab-saved { color: var(--text3); }
+  .tab-saved.active { color: var(--text); }
+  .tab-saved-sep { align-self: center; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--text3); padding: 0 10px 0 14px; border-left: 1px solid var(--border2); margin-left: 8px; flex-shrink: 0; pointer-events: none; }
+
+  /* ── Main ── */
+  .main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .panel { display: none; } .panel.active { display: block; }
+
+  /* ── Metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .metric { background: var(--surface2); border-radius: var(--r-md); padding: 12px 14px; }
+  .metric-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+  .metric-value { font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: -.02em; }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Filters ── */
+  .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filter-row label { font-size: 12px; color: var(--text2); }
+  select { font-size: 12px; padding: 5px 8px; border: 0.5px solid var(--border2); border-radius: var(--r-md); background: var(--surface); color: var(--text); cursor: pointer; }
+  input[type=range] { accent-color: var(--accent); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--r-lg); border: 0.5px solid var(--border2); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: var(--surface2); padding: 8px 12px; text-align: left; font-weight: 500; font-size: 11px; color: var(--text2); border-bottom: 0.5px solid var(--border2); white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 0.5px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  /* Levels table: every cell is a single line so imported text/line-breaks can never blow up row height */
+  .lvl-table td { white-space: nowrap; }
+  /* Feature column: cap width via an INNER div (max-width on a <td> is ignored in table-layout:auto) */
+  .feat-cap { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mech-cap { max-width: 150px; overflow: hidden; display: flex; gap: 4px; }
+  .sort-btn { background: none; border: none; cursor: pointer; font-size: 10px; color: var(--text3); padding: 0 2px; }
+  .sort-btn:hover { color: var(--text); }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+  /* Editor tags (from spreadsheet) */
+  .b-normal { background: var(--green-light); color: var(--green); }
+  .b-hard { background: var(--amber-light); color: var(--amber); }
+  .b-superhard { background: var(--red-light); color: var(--red); }
+  .b-easywin { background: var(--green-light); color: #085041; }
+  .b-feature { background: var(--accent-light); color: var(--accent); white-space: normal; }
+  .b-mech-custom { background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border2); }
+  /* Type tags */
+  .b-basic { background: var(--blue-light); color: var(--blue); }
+  .b-garage { background: var(--accent-light); color: var(--accent); }
+  .b-conveyor { background: var(--pink-light); color: var(--pink); }
+  .b-mixed { background: #f0efe9; color: #444441; border: 0.5px solid rgba(0,0,0,.12); }
+  /* Auto WR tags — soft underline + muted bg to distinguish from editor solid tags */
+  .b-auto { background: transparent; font-size: 10px; border: none; border-bottom: 2px solid currentColor; border-radius: 3px; padding-bottom: 0px; opacity: 0.85; }
+  .b-wr-killer { color: #9b2a2a; }
+  .b-wr-vhard  { color: #b03a14; }
+  .b-wr-hard   { color: #8f5800; }
+  .b-wr-normal { color: #1a5fa8; }
+  .b-wr-easy   { color: #0d7a5f; }
+  .b-wr-izzy   { color: #0a5c3a; }
+  @media (prefers-color-scheme: dark) {
+    .b-wr-killer { color: #f09595; }
+    .b-wr-vhard  { color: #F0997B; }
+    .b-wr-hard   { color: #FAC775; }
+    .b-wr-normal { color: #85B7EB; }
+    .b-wr-easy   { color: #5DCAA5; }
+    .b-wr-izzy   { color: #9FE1CB; }
+  }
+  /* Tag legend row */
+  .tag-legend { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; align-items:center; }
+  .tag-legend-sep { font-size:10px; color:var(--text3); padding: 0 4px; }
+
+  /* ── WR colors ── */
+  .wr-good { color: var(--green); font-weight: 500; }
+  .wr-ok { color: var(--amber); font-weight: 500; }
+  .wr-bad { color: var(--red); font-weight: 500; }
+
+  /* ── Charts ── */
+  .chart-box { background: var(--surface); border-radius: var(--r-lg); border: 0.5px solid var(--border); padding: 16px; margin-bottom: 16px; }
+  .chart-title { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  /* ── Insights ── */
+  .ins-section { margin-bottom: 24px; }
+  .ins-section-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .ins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+  .ins-card { display: flex; gap: 12px; background: var(--surface); border: 0.5px solid var(--border); border-left-width: 3px; border-radius: var(--r-md); padding: 14px 16px; }
+  .ins-card.ins-crit { border-left-color: var(--red); }
+  .ins-card.ins-warn { border-left-color: var(--amber); }
+  .ins-card.ins-good { border-left-color: var(--green); }
+  .ins-card.ins-info { border-left-color: var(--blue); }
+  .ins-icon { font-size: 16px; line-height: 1.3; flex-shrink: 0; }
+  .ins-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .ins-text { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .ins-text b { color: var(--text); font-weight: 600; }
+  /* ── Editable difficulty tag ── */
+  .diff-select { font-size: 11px; padding: 2px 4px; border: 0.5px solid var(--border2); border-radius: var(--r-md); background: var(--surface); color: var(--text2); cursor: pointer; max-width: 130px; }
+  .diff-select.diff-sel-hard { color: var(--amber); border-color: var(--amber); background: var(--amber-light); font-weight: 500; }
+  .diff-select.diff-sel-superhard { color: var(--red); border-color: var(--red); background: var(--red-light); font-weight: 500; }
+  .diff-select.diff-sel-easywin { color: var(--green); border-color: var(--green); background: var(--green-light); }
+  .diff-cycle { cursor: pointer; user-select: none; }
+  .diff-cycle-empty { display: inline-flex; align-items: center; padding: 1px 6px; font-size: 10px; line-height: 1.4; color: var(--text3); border: 0.5px dashed var(--border2); border-radius: 6px; opacity: .6; transition: opacity .12s; white-space: nowrap; }
+  .diff-cycle-empty:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Lists ── */
+  .list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; gap: 8px; }
+  .list-item:last-child { border-bottom: none; }
+  .list-key { color: var(--text2); flex-shrink: 0; }
+  .list-val { font-weight: 500; text-align: right; }
+  .pass-free { color: var(--text2); font-size: 11px; max-width: 160px; text-align: right; }
+  .pass-gold { color: var(--amber); font-size: 11px; max-width: 160px; text-align: right; }
+  .pass-lvl { font-size: 11px; font-weight: 600; color: var(--text3); min-width: 32px; }
+
+  /* ── Simulator ── */
+  .slider-block { margin-bottom: 14px; }
+  .slider-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+  .slider-label span:first-child { color: var(--text2); }
+  .slider-label span:last-child { font-weight: 500; }
+  input[type=range] { width: 100%; }
+  .sim-output { background: var(--surface2); border-radius: var(--r-lg); padding: 16px; }
+  .sim-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 0.5px solid var(--border); }
+  .sim-row:last-child { border-bottom: none; }
+  .sim-key { color: var(--text2); }
+  .sim-val { font-weight: 500; }
+
+  /* ── Config modal ── */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; align-items: center; justify-content: center; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--r-xl); padding: 24px; width: 480px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+  .modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+  .modal p { font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.6; }
+  .modal label { font-size: 12px; font-weight: 500; display: block; margin-bottom: 4px; margin-top: 12px; }
+  .modal input[type=text] { width: 100%; padding: 8px 10px; border: 0.5px solid var(--border2); border-radius: var(--r-md); background: var(--surface2); color: var(--text); font-size: 13px; }
+  .modal input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .btn-primary { flex: 1; padding: 9px; background: var(--accent); color: #fff; border: none; border-radius: var(--r-md); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { padding: 9px 16px; background: none; color: var(--text2); border: 0.5px solid var(--border2); border-radius: var(--r-md); font-size: 13px; cursor: pointer; }
+  .btn-secondary:hover { background: var(--surface2); }
+  .code-block { background: var(--surface2); border-radius: var(--r-md); padding: 10px 12px; font-family: 'SF Mono', monospace; font-size: 11px; color: var(--text); margin: 8px 0; line-height: 1.7; overflow-x: auto; border: 0.5px solid var(--border); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: var(--accent); color: #fff; border-radius: 50%; font-size: 10px; font-weight: 600; margin-right: 6px; flex-shrink: 0; }
+  .step { display: flex; align-items: flex-start; margin-bottom: 10px; }
+  .tag-new { display: inline-block; font-size: 9px; padding: 1px 6px; background: var(--green-light); color: var(--green); border-radius: 8px; font-weight: 600; margin-left: 6px; vertical-align: middle; }
+  .data-source-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 8px; border-radius: 8px; }
+  .ds-sheets { background: var(--green-light); color: var(--green); }
+  .ds-local { background: var(--blue-light); color: var(--blue); }
+
+  /* IAP table */
+  .iap-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; font-size: 12px; }
+  .iap-header { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; padding: 6px 0 4px; border-bottom: 0.5px solid var(--border2); display: contents; }
+  .iap-row-g { display: contents; }
+  .iap-row-g > div { padding: 6px 0; border-bottom: 0.5px solid var(--border); }
+  .iap-row-g:last-child > div { border-bottom: none; }
+
+  .drag-over { background: var(--accent-light) !important; border-color: var(--accent) !important; }
+  .funnel-card { display:flex; align-items:center; gap:6px; padding:5px 8px; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; font-size:11px; transition:background .1s; }
+  .funnel-card:hover { background:var(--surface2); border-color:var(--border2); }
+  .funnel-card.dragging { opacity:.4; cursor:grabbing; }
+  .funnel-card.in-draft { opacity:.45; }
+  .fc-num { font-size:10px; color:var(--text3); min-width:20px; font-weight:600; }
+  .fc-pos { font-size:10px; color:var(--accent); min-width:22px; font-weight:700; text-align:right; }
+  .fc-hash { font-size:9px; color:var(--text3); min-width:26px; }
+  .fc-finalpos { font-size:9px; color:var(--text3); flex-shrink:0; white-space:nowrap; }
+  .fc-name { flex:1; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fc-wr { font-size:10px; min-width:30px; text-align:right; font-weight:500; white-space:nowrap; }
+  .fc-wr-user { font-size:9px; min-width:46px; text-align:right; margin-left:4px; }
+  .fc-handle { cursor:grab; color:var(--text3); font-size:13px; padding:0 2px; }
+  .fc-del { cursor:pointer; color:var(--text3); font-size:12px; padding:0 2px; line-height:1; }
+  .fc-del:hover { color:var(--red); }
+  .fc-add { cursor:pointer; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:5px; border:0.5px solid var(--border2); color:var(--text3); font-size:13px; line-height:1; transition:all .12s; }
+  .fc-add:hover { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .draft-pos { font-size:10px; color:var(--text3); min-width:16px; font-weight:600; }
+  /* draft row = draggable level card + a separate (non-draggable) annotations field */
+  .draft-row { display:flex; align-items:stretch; gap:8px; }
+  .draft-row > .funnel-card { flex:1; min-width:0; }
+  .draft-annot { flex-shrink:0; width:300px; display:flex; align-items:center; gap:6px; padding:3px 8px; border:1px dashed var(--border2); border-radius:var(--r-md); background:var(--surface2); }
+  .fc-lmcell { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:3px; align-items:center; align-self:stretch; }
+  .fc-lmcell.lm-over { background:var(--accent-light); border-radius:6px; }
+  .fc-lm { padding:2px 7px; border-radius:6px; font-size:10px; max-width:210px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:all .12s; }
+  .fc-lm.has { background:var(--accent-light); color:var(--accent); font-weight:600; cursor:grab; }
+  .fc-lm.has:active { cursor:grabbing; }
+  /* landmark editor popover */
+  #lm-pop { display:none; position:absolute; z-index:1000; width:230px; background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--r-lg); padding:12px; box-shadow:0 6px 24px rgba(0,0,0,.18); }
+  #lm-pop-text { width:100%; box-sizing:border-box; padding:6px 9px; border:0.5px solid var(--border2); border-radius:var(--r-md); background:var(--surface); color:var(--text); font-size:12px; }
+  #lm-pop-palette { display:flex; flex-wrap:wrap; gap:6px; }
+  .lm-swatch { width:20px; height:20px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:transform .1s; }
+  .lm-swatch:hover { transform:scale(1.15); }
+  .lm-swatch.sel { border-color:var(--text); box-shadow:0 0 0 2px var(--surface) inset; }
+  .fc-lm.add { min-width:16px; text-align:center; color:var(--text3); border:0.5px dashed var(--border2); opacity:.6; padding:1px 4px; font-weight:600; }
+  .fc-lm.add:hover { opacity:1; color:var(--accent); border-color:var(--accent); }
+  .fc-lm.add.lm-add-hard { color:var(--amber); border-color:var(--amber); }
+  .fc-lm.add.lm-add-hard:hover { background:var(--amber); color:#fff; }
+  .fc-lm.add.lm-add-shard { color:var(--red); border-color:var(--red); }
+  .fc-lm.add.lm-add-shard:hover { background:var(--red); color:#fff; }
+  .fc-target { flex-shrink:0; width:62px; margin-left:6px; display:flex; align-items:center; justify-content:flex-end; gap:1px; }
+  .fc-target-inp { width:34px; padding:2px 3px; border:0.5px solid var(--border2); border-radius:4px; background:var(--surface); font-size:10px; font-weight:600; text-align:right; -moz-appearance:textfield; }
+  .fc-target-inp::-webkit-outer-spin-button, .fc-target-inp::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fc-target-pct { font-size:9px; color:var(--text3); }
+  .pf-active, .lf-active { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
+  .drop-hint { text-align:center; padding:40px 12px; color:var(--text3); font-size:12px; border:1.5px dashed var(--border2); border-radius:var(--r-md); }
+  .funnel-sep { display:flex; align-items:center; gap:8px; padding:3px 4px; font-size:10px; color:var(--text3); user-select:none; }
+  .funnel-sep input { font-size:10px; padding:2px 6px; border:0.5px solid var(--border2); border-radius:5px; background:var(--surface2); color:var(--text); width:100%; }
+
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Wool <span>Quest</span> — Balance Constructor</div>
+    <span class="data-source-badge" id="source-badge">
+      <span class="ds-local">⬤ Local data</span>
+    </span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="sync-status" id="sync-status"></span>
+    <input type="text" id="quick-sheet-name" placeholder="Имя листа" value="Levels 5.0"
+      style="font-size:12px;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);width:130px">
+    <button class="config-btn" onclick="document.getElementById('config-overlay').classList.add('open')">⚙</button>
+    <button class="sync-btn" id="sync-btn" onclick="syncSheets()">↻ Обновить</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('levels',this)">Уровни</button>
+  <button class="tab" onclick="showTab('funnel',this)">🎯 Воронка</button>
+</div>
+
+<div class="main">
+
+  <!-- LEVELS -->
+  <div id="tab-levels" class="panel active">
+    <div class="metrics" id="level-metrics"></div>
+    <div class="filter-row" style="flex-wrap:wrap;row-gap:8px">
+      <label>Тип:</label>
+      <select id="f-type" onchange="renderLevels()">
+        <option value="">Все типы</option>
+        <option value="basic">basic</option>
+        <option value="garage">garage</option>
+        <option value="conveyor">conveyor</option>
+        <option value="mixed">multiple</option>
+      </select>
+      <label>Ред. сложность:</label>
+      <select id="f-diff" onchange="renderLevels()">
+        <option value="">Любая</option>
+        <option value="normal">Нормальный</option>
+        <option value="hard">Сложный</option>
+        <option value="superhard">Супер Сложный</option>
+      </select>
+      <label>Bot WR ≥ <span id="f-wr-val" style="font-weight:600;color:var(--text)">0%</span></label>
+      <input type="range" min="0" max="100" value="0" id="f-wr"
+        oninput="document.getElementById('f-wr-val').textContent=this.value+'%';renderLevels()"
+        style="width:180px">
+    </div>
+    <div class="filter-row" style="flex-wrap:wrap;gap:5px;margin-top:-4px;margin-bottom:12px">
+      <span style="font-size:11px;color:var(--text3)">Авто-тег:</span>
+      <button class="config-btn lf-auto-btn lf-active" onclick="setLevelAutoFilter('')" id="lf-all" style="font-size:11px;padding:3px 8px">Все</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('killer')" id="lf-killer" style="font-size:11px;padding:3px 7px">💀 Убийца</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('vhard')"  id="lf-vhard"  style="font-size:11px;padding:3px 7px">🔥 Оч.сложный</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('hard')"   id="lf-hard"   style="font-size:11px;padding:3px 7px">⚡ Сложный</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('normal')" id="lf-normal" style="font-size:11px;padding:3px 7px">🎯 Нормальный</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('easy')"   id="lf-easy"   style="font-size:11px;padding:3px 7px">😊 Лёгкий</button>
+      <button class="config-btn lf-auto-btn" onclick="setLevelAutoFilter('izzy')"   id="lf-izzy"   style="font-size:11px;padding:3px 7px">⭐ Изи</button>
+    </div>
+    <div class="table-wrap">
+      <table class="lvl-table">
+        <thead><tr>
+          <th>№ <button class="sort-btn" onclick="sortBy('n')">▲▼</button></th>
+          <th>Название</th>
+          <th>Тип</th>
+          <th style="white-space:nowrap">Сложность</th>
+          <th style="white-space:nowrap">Авто-тег <span style="font-size:9px;color:var(--text3);font-weight:400">(Bot WR)</span></th>
+          <th>Subtype</th>
+          <th>Composition</th>
+          <th>Нитки <button class="sort-btn" onclick="sortBy('threads')">▲▼</button></th>
+          <th>Bot WR <button class="sort-btn" onclick="sortBy('botwr')">▲▼</button></th>
+          <th>Users WR <button class="sort-btn" onclick="sortBy('userswr')">▲▼</button></th>
+          <th style="min-width:170px">Фичи</th>
+        </tr></thead>
+        <tbody id="levels-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- MECHANIC BREAKDOWN (avg WR by mechanic within difficulty) -->
+    <div style="margin-top:28px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:500">📊 Средний WR по механикам внутри сложности</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">Для каждой сложности — общий средний Bot WR и в разрезе механик уровней</span>
+    </div>
+    <div id="levels-mechbreak" style="max-width:760px"></div>
+
+    <!-- INSIGHTS (at the end of the Levels tab) -->
+    <div style="margin-top:28px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:500">💡 Инсайты по балансу</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">Автоматические выводы на основе текущих данных (по всем уровням, в порядке листа)</span>
+    </div>
+    <div id="levels-insights-metrics" class="metrics" style="margin-bottom:20px"></div>
+    <div id="levels-insights-body"></div>
+  </div>
+
+  <!-- FUNNEL -->
+  <div id="tab-funnel" class="panel">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div>
+        <span style="font-size:13px;font-weight:500">Конструктор воронки</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">Перетаскивай уровни для пересборки порядка</span>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="config-btn" onclick="funnelReset()" style="font-size:12px">↺ Сбросить</button>
+        <button class="config-btn" onclick="funnelClear()" style="font-size:12px">🗑 Очистить</button>
+        <button class="config-btn" onclick="funnelCopyList()" style="font-size:12px">📋 Скопировать список</button>
+        <button class="config-btn" onclick="funnelSaveDraft()" style="font-size:12px">💾 Сохранить черновик</button>
+        <button class="sync-btn" onclick="saveFunnelVersion()" style="font-size:12px">📁 Сохранить как воронку</button>
+      </div>
+    </div>
+
+    <div id="funnel-metrics" class="metrics" style="margin-bottom:16px"></div>
+
+    <div style="display:grid;grid-template-columns:440px 1fr;gap:16px;align-items:start">
+
+      <!-- LEFT: pool of available levels -->
+      <div>
+        <div style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Банк уровней</div>
+        <div class="filter-row" style="margin-bottom:8px">
+          <input type="text" id="pool-search" placeholder="Поиск..." oninput="renderPool()"
+            style="width:100%;padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:12px">
+        </div>
+        <div class="filter-row" style="margin-bottom:6px;gap:4px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Тип механики:</span>
+          <button class="config-btn pf-active" onclick="setPoolFilter('type','')" id="pf-all" style="font-size:11px;padding:3px 8px">Все</button>
+          <button class="config-btn" onclick="setPoolFilter('type','basic')" id="pf-basic" style="font-size:11px;padding:3px 8px">basic</button>
+          <button class="config-btn" onclick="setPoolFilter('type','garage')" id="pf-garage" style="font-size:11px;padding:3px 8px">garage</button>
+          <button class="config-btn" onclick="setPoolFilter('type','conveyor')" id="pf-conv" style="font-size:11px;padding:3px 8px">conveyor</button>
+          <button class="config-btn" onclick="setPoolFilter('type','mixed')" id="pf-mixed" style="font-size:11px;padding:3px 8px">multiple</button>
+        </div>
+        <div class="filter-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Подтип / состав:</span>
+          <select id="pf-subtype" onchange="setPoolSelect('subtype',this.value)" style="font-size:11px;padding:3px 6px">
+            <option value="">Подтип: все</option>
+            <option value="directional">directional</option>
+            <option value="diagonal">diagonal</option>
+            <option value="combined">combined</option>
+          </select>
+          <select id="pf-comp" onchange="setPoolSelect('comp',this.value)" style="font-size:11px;padding:3px 6px">
+            <option value="">Состав: все</option>
+            <option value="simple">simple</option>
+            <option value="complex">complex</option>
+          </select>
+        </div>
+        <div class="filter-row" style="margin-bottom:8px;gap:4px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Авто-сложность (Bot WR):</span>
+          <button class="config-btn" onclick="setPoolFilter('wr','killer')"   id="pf-killer"    style="font-size:11px;padding:3px 7px">💀 Убийца</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','vhard')"    id="pf-vhard"     style="font-size:11px;padding:3px 7px">🔥 Оч.сложный</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','hard')"     id="pf-hard-wr"   style="font-size:11px;padding:3px 7px">⚡ Сложный</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','normal')"   id="pf-normal-wr" style="font-size:11px;padding:3px 7px">🎯 Нормальный</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','easy')"     id="pf-easy-wr"   style="font-size:11px;padding:3px 7px">😊 Лёгкий</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','izzy')"     id="pf-izzy-wr"   style="font-size:11px;padding:3px 7px">⭐ Изи</button>
+          <button class="config-btn" onclick="setPoolFilter('wr','')"         id="pf-wr-all"    style="font-size:11px;padding:3px 7px;opacity:.6">✕ сброс</button>
+        </div>
+        <div style="margin-bottom:8px;padding:0 2px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:3px">
+            <span>Bot WR диапазон</span>
+            <span id="pool-wr-range-label" style="font-weight:500;color:var(--text)">0% – 100%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:10px;color:var(--text3);min-width:20px">0%</span>
+            <input type="range" min="0" max="100" value="0"  id="pool-wr-min" step="5"
+              oninput="onPoolWrRange()" style="flex:1;accent-color:var(--accent)">
+            <input type="range" min="0" max="100" value="100" id="pool-wr-max" step="5"
+              oninput="onPoolWrRange()" style="flex:1;accent-color:var(--accent)">
+            <span style="font-size:10px;color:var(--text3);min-width:26px">100%</span>
+          </div>
+        </div>
+        <div id="funnel-pool" style="height:540px;overflow-y:auto;border:0.5px solid var(--border2);border-radius:var(--r-lg);padding:6px;display:flex;flex-direction:column;gap:3px"></div>
+        <!-- Tag legend -->
+        <div style="margin-top:8px;font-size:10px;color:var(--text3);line-height:1.8">
+          <div style="margin-bottom:2px;font-weight:500">Легенда тегов:</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:9px;color:var(--text3)">Редакторские →</span>
+            <span class="badge b-superhard" style="font-size:9px">Супер Сложный</span>
+            <span class="badge b-hard" style="font-size:9px">Сложный</span>
+            
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:3px">
+            <span style="font-size:9px;color:var(--text3)">Авто (Bot WR) →</span>
+            <span class="badge b-auto b-wr-killer" style="font-size:9px">💀 &lt;10%</span>
+            <span class="badge b-auto b-wr-vhard" style="font-size:9px">🔥 10–30%</span>
+            <span class="badge b-auto b-wr-hard" style="font-size:9px">⚡ 30–50%</span>
+            <span class="badge b-auto b-wr-normal" style="font-size:9px">🎯 50–70%</span>
+            <span class="badge b-auto b-wr-easy" style="font-size:9px">😊 70–90%</span>
+            <span class="badge b-auto b-wr-izzy" style="font-size:9px">⭐ 90%+</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: draft funnel (full width) -->
+      <div>
+        <div>
+          <!-- DRAFT funnel (editable, drag-drop) -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Черновик</span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--amber-light);color:var(--amber);border-radius:8px;font-weight:500">WIP</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:auto" id="draft-count"></span>
+          </div>
+          <div style="display:flex;gap:8px;padding:0 6px 4px;font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">
+            <span style="flex:1">⠿ Уровни — перетаскивай для пересборки</span>
+            <span style="width:300px;flex-shrink:0">Ориентиры · таргет WR (на месте)</span>
+          </div>
+          <div id="funnel-draft" style="min-height:620px;border:0.5px dashed var(--border2);border-radius:var(--r-lg);padding:6px;display:flex;flex-direction:column;gap:3px"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="dropOnDraft(event)"></div>
+        </div>
+        <!-- WR curve mini-chart -->
+        <div class="chart-box" style="margin-top:12px">
+          <div class="chart-title">Кривая Bot WR черновика</div>
+          <div style="height:120px;position:relative"><canvas id="funnelWrChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WR breakdown analytics -->
+    <div class="chart-box" style="margin-top:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <span class="chart-title" style="margin-bottom:0">Вин-рейт по типам и сложностям</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="config-btn pf-active" id="bd-src-draft" onclick="setBreakdownSrc('draft')" style="font-size:11px;padding:3px 9px">Черновик</button>
+          <button class="config-btn" id="bd-src-all" onclick="setBreakdownSrc('all')" style="font-size:11px;padding:3px 9px">Все уровни</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+        <div>
+          <div class="chart-title" style="font-size:11px">Средний Bot WR по сложности</div>
+          <div style="height:210px;position:relative"><canvas id="bdDiffChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title" style="font-size:11px">Средний Bot WR по типам (механикам)</div>
+          <div style="height:210px;position:relative"><canvas id="bdTypeChart"></canvas></div>
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <div class="chart-title" style="font-size:11px">Механики внутри сложностей — средний Bot WR</div>
+        <div style="height:280px;position:relative"><canvas id="bdMechChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+
+<!-- LANDMARK EDITOR POPOVER -->
+<div id="lm-pop">
+  <input id="lm-pop-text" type="text" placeholder="Текст ориентира" onkeydown="if(event.key==='Enter')saveLmEditor();if(event.key==='Escape')closeLmEditor()">
+  <div style="font-size:10px;color:var(--text3);margin:8px 0 4px">Цвет:</div>
+  <div id="lm-pop-palette"></div>
+  <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px;align-items:center">
+    <button id="lm-pop-del" class="config-btn" style="font-size:11px;color:var(--red);margin-right:auto" onclick="deleteLmEditor()">🗑 Удалить</button>
+    <button class="config-btn" style="font-size:11px" onclick="closeLmEditor()">Отмена</button>
+    <button class="sync-btn" style="font-size:11px" onclick="saveLmEditor()">Сохранить</button>
+  </div>
+</div>
+
+<!-- CONFIG MODAL -->
+<div class="overlay" id="config-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <h2>Подключение Google Sheets</h2>
+    <p>Введи данные своей таблицы, чтобы конструктор автоматически подтягивал актуальные данные при нажатии «Обновить».</p>
+
+    <div style="background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:16px">
+      <div class="step"><span class="step-num">1</span><span style="font-size:12px;color:var(--text2)">Открой свою таблицу в Google Sheets</span></div>
+      <div class="step"><span class="step-num">2</span><span style="font-size:12px;color:var(--text2)">Файл → Поделиться → Настройки доступа → «Все у кого есть ссылка»</span></div>
+      <div class="step"><span class="step-num">3</span><span style="font-size:12px;color:var(--text2)">Скопируй ID из адресной строки:<br>
+        <code style="font-size:10px;color:var(--accent)">docs.google.com/spreadsheets/d/<b>ЭТОТ_ID_СЮДА</b>/edit</code>
+      </span></div>
+    </div>
+
+    <label>Google Sheets ID</label>
+    <input type="text" id="sheets-id" placeholder="1PnrFE3vhBr_QOnbAr_hq8TM-QHvGw4atF29QXjao864" value="">
+
+    <p style="margin-top:12px;font-size:11px;color:var(--text3)">
+      Если таблица приватная — нужен API Key от Google Cloud Console (Sheets API v4). Для публичных таблиц не нужен.
+    </p>
+    <label>Google API Key (опционально)</label>
+    <input type="text" id="api-key" placeholder="AIza...">
+
+    <p style="margin-top:16px;font-size:12px;font-weight:500">Лист с уровнями</p>
+    <p style="font-size:11px;color:var(--text3)">Название листа в твоей таблице.</p>
+    <input type="text" id="sheet-levels" value="Levels 5.0">
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="document.getElementById('config-overlay').classList.remove('open')">Отмена</button>
+      <button class="btn-primary" onclick="saveConfig()">Сохранить и подключить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  DATA — встроенные данные (используются пока нет Sheets)
+// ─────────────────────────────────────────────
+const BUILTIN_LEVELS = [{"n": 1, "name": "Tutorial", "type": "tutorial", "diff": "normal", "s": 2, "m": 2, "l": 2, "threads": 40, "life": 1, "botwr": 1.0, "userswr": 0.9941, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 2, "name": "Basic_1", "type": "basic", "diff": "normal", "s": 12, "m": 8, "l": 8, "threads": 176, "life": 1, "botwr": 0.9867, "userswr": 0.949, "notes": "", "features": "", "freeze": 0.2, "knock": 0.65, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 3, "name": "Basic_2", "type": "basic", "diff": "normal", "s": 17, "m": 13, "l": 16, "threads": 306, "life": 1, "botwr": 0.84, "userswr": 0.8616, "notes": "", "features": "", "freeze": 0.6, "knock": 0.2, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 4, "name": "Garage_1", "type": "garage", "diff": "normal", "s": 13, "m": 12, "l": 23, "threads": 354, "life": 1, "botwr": 0.8167, "userswr": 0.8802, "notes": "", "features": "Рейт ас", "freeze": 0.65, "knock": 0.25, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 5, "name": "Basic_3", "type": "basic", "diff": "normal", "s": 9, "m": 11, "l": 29, "threads": 392, "life": 1, "botwr": 0.7933, "userswr": 0.8041, "notes": "", "features": "", "freeze": 0.65, "knock": 0.2, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 6, "name": "Garage_6", "type": "garage", "diff": "hard", "s": 10, "m": 17, "l": 27, "threads": 412, "life": 3, "botwr": 0.52, "userswr": 0.6417, "notes": "", "features": "", "freeze": 0.2, "knock": 45.0, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 7, "name": "Basic_4", "type": "basic", "diff": "normal", "s": 23, "m": 8, "l": 18, "threads": 320, "life": 2, "botwr": 0.9533, "userswr": 0.9128, "notes": "", "features": "", "freeze": null, "knock": 0.55, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 8, "name": "Conveyor_1", "type": "conveyor", "diff": "normal", "s": 20, "m": 21, "l": 20, "threads": 406, "life": 3, "botwr": 0.0, "userswr": 0.8238, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 9, "name": "Basic_5", "type": "basic", "diff": "normal", "s": 12, "m": 8, "l": 18, "threads": 276, "life": 3, "botwr": 0.5167, "userswr": 0.7489, "notes": "", "features": "", "freeze": 0.25, "knock": 0.65, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 10, "name": "Garage_3", "type": "garage", "diff": "normal", "s": 13, "m": 12, "l": 23, "threads": 354, "life": 3, "botwr": 0.9167, "userswr": 0.9258, "notes": "", "features": "батлпасс. Даем анлок бустер перед первым супер сложным левелом", "freeze": 0.2, "knock": 0.6, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 11, "name": "Basic_6", "type": "basic", "diff": "superhard", "s": 18, "m": 8, "l": 24, "threads": 360, "life": 3, "botwr": 0.0933, "userswr": 0.2826, "notes": "надо облегчить", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 12, "name": "Basic_7", "type": "basic", "diff": "easywin", "s": 28, "m": 13, "l": 15, "threads": 340, "life": 3, "botwr": 0.95, "userswr": 0.8826, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 13, "name": "Conveyor_2", "type": "conveyor", "diff": "normal", "s": 21, "m": 21, "l": 15, "threads": 360, "life": 2, "botwr": 0.0033, "userswr": 0.6165, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 14, "name": "Basic_8", "type": "basic", "diff": "normal", "s": 11, "m": 9, "l": 23, "threads": 328, "life": 2, "botwr": 0.91, "userswr": 0.8297, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 15, "name": "Conveyor_3", "type": "conveyor", "diff": "normal", "s": 17, "m": 23, "l": 13, "threads": 336, "life": 3, "botwr": 0.0, "userswr": 0.4961, "notes": "", "features": "Интеры", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 16, "name": "Basic_9", "type": "basic", "diff": "normal", "s": 28, "m": 9, "l": 21, "threads": 376, "life": 2, "botwr": 0.7933, "userswr": 0.9121, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 17, "name": "Garage_4", "type": "garage", "diff": "hard", "s": 16, "m": 16, "l": 28, "threads": 440, "life": 3, "botwr": 0.08, "userswr": 0.2347, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 18, "name": "Basic_10", "type": "basic", "diff": "normal", "s": 18, "m": 12, "l": 17, "threads": 314, "life": 2, "botwr": 0.8467, "userswr": 0.7953, "notes": "", "features": "", "freeze": 0.55, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 19, "name": "Basic_11", "type": "basic", "diff": "normal", "s": 32, "m": 12, "l": 14, "threads": 340, "life": 1, "botwr": 0.52, "userswr": 0.4901, "notes": "", "features": "", "freeze": null, "knock": 0.6, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 20, "name": "Garage_5", "type": "garage", "diff": "normal", "s": 17, "m": 14, "l": 27, "threads": 422, "life": 3, "botwr": 0.83, "userswr": 0.835, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 21, "name": "Basic_12", "type": "basic", "diff": "superhard", "s": 14, "m": 18, "l": 22, "threads": 384, "life": 3, "botwr": 0.0533, "userswr": 0.1891, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 22, "name": "Basic_13", "type": "basic", "diff": "easywin", "s": 17, "m": 13, "l": 21, "threads": 356, "life": 2, "botwr": 0.9467, "userswr": 0.8586, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 23, "name": "Garage_2", "type": "garage", "diff": "normal", "s": 14, "m": 27, "l": 20, "threads": 418, "life": 1, "botwr": 0.5567, "userswr": 0.3815, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 24, "name": "Basic_16", "type": "basic", "diff": "normal", "s": 16, "m": 12, "l": 20, "threads": 336, "life": 3, "botwr": 0.69, "userswr": 0.7559, "notes": "чуть упростить", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 25, "name": "Basic_15", "type": "basic", "diff": "normal", "s": 10, "m": 14, "l": 22, "threads": 344, "life": 3, "botwr": 0.2733, "userswr": 0.5323, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 26, "name": "Conveyor_4", "type": "conveyor", "diff": "normal", "s": 15, "m": 13, "l": 23, "threads": 368, "life": 3, "botwr": 0.0, "userswr": 0.8923, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 27, "name": "Basic_17", "type": "basic", "diff": "hard", "s": 12, "m": 15, "l": 28, "threads": 418, "life": 3, "botwr": 0.0633, "userswr": 0.3477, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 28, "name": "Basic_18", "type": "basic", "diff": "normal", "s": 23, "m": 15, "l": 8, "threads": 262, "life": 3, "botwr": 0.61, "userswr": 0.8943, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 29, "name": "Conveyor_5", "type": "conveyor", "diff": "normal", "s": 24, "m": 18, "l": 19, "threads": 394, "life": 3, "botwr": 0.0, "userswr": 0.4056, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 30, "name": "Basic_19", "type": "basic", "diff": "normal", "s": 28, "m": 0, "l": 24, "threads": 352, "life": 3, "botwr": 0.5733, "userswr": 0.6401, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 31, "name": "Basic_20", "type": "basic", "diff": "superhard", "s": 12, "m": 21, "l": 21, "threads": 384, "life": 3, "botwr": 0.04, "userswr": 0.3088, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 32, "name": "Basic_21", "type": "basic", "diff": "easywin", "s": 21, "m": 20, "l": 4, "threads": 244, "life": 3, "botwr": 0.9133, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 33, "name": "Basic_14", "type": "basic", "diff": "normal", "s": 16, "m": 16, "l": 16, "threads": 320, "life": 3, "botwr": 0.4333, "userswr": 0.4984, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 34, "name": "Basic_22", "type": "basic", "diff": "normal", "s": 11, "m": 13, "l": 21, "threads": 332, "life": 3, "botwr": 0.9333, "userswr": 0.9381, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 35, "name": "Basic_23", "type": "basic", "diff": "normal", "s": 8, "m": 7, "l": 33, "threads": 404, "life": 3, "botwr": 0.35, "userswr": 0.627, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 36, "name": "Conveyor_6", "type": "conveyor", "diff": "normal", "s": 13, "m": 18, "l": 17, "threads": 330, "life": 3, "botwr": 0.0033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 37, "name": "Basic_24", "type": "basic", "diff": "hard", "s": 17, "m": 15, "l": 20, "threads": 358, "life": 3, "botwr": 0.2167, "userswr": 0.4218, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 38, "name": "Basic_25", "type": "basic", "diff": "normal", "s": 14, "m": 22, "l": 6, "threads": 248, "life": 3, "botwr": 0.8467, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 39, "name": "Garage_7", "type": "garage", "diff": "normal", "s": 13, "m": 18, "l": 23, "threads": 390, "life": 3, "botwr": 0.2433, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 40, "name": "Basic_26", "type": "basic", "diff": "normal", "s": 17, "m": 13, "l": 21, "threads": 356, "life": 3, "botwr": 0.84, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 41, "name": "Garage_8", "type": "garage", "diff": "superhard", "s": 24, "m": 17, "l": 29, "threads": 488, "life": 3, "botwr": 0.04, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 42, "name": "Mixed_1", "type": "mixed", "diff": "easywin", "s": 23, "m": 12, "l": 20, "threads": 364, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 43, "name": "Basic_27", "type": "basic", "diff": "normal", "s": 23, "m": 27, "l": 15, "threads": 404, "life": 3, "botwr": 0.8333, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 44, "name": "Basic_28", "type": "basic", "diff": "normal", "s": 12, "m": 20, "l": 12, "threads": 288, "life": 3, "botwr": 0.8433, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 45, "name": "Garage_9", "type": "garage", "diff": "normal", "s": 20, "m": 16, "l": 13, "threads": 306, "life": 3, "botwr": 0.65, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 46, "name": "Basic_29", "type": "basic", "diff": "normal", "s": 9, "m": 15, "l": 10, "threads": 226, "life": 3, "botwr": 0.8433, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 47, "name": "Garage_10", "type": "garage", "diff": "hard", "s": 14, "m": 25, "l": 12, "threads": 326, "life": 3, "botwr": 0.68, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 48, "name": "Basic_30", "type": "basic", "diff": "normal", "s": 14, "m": 20, "l": 12, "threads": 296, "life": 3, "botwr": 0.8967, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 49, "name": "Basic_31", "type": "basic", "diff": "normal", "s": 21, "m": 20, "l": 16, "threads": 364, "life": 3, "botwr": 0.3267, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 50, "name": "Conveyor_7", "type": "conveyor", "diff": "normal", "s": 27, "m": 16, "l": 15, "threads": 354, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 51, "name": "Basic_32", "type": "basic", "diff": "superhard", "s": 20, "m": 20, "l": 16, "threads": 360, "life": 3, "botwr": 0.0933, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 52, "name": "Garage_11", "type": "garage", "diff": "easywin", "s": 14, "m": 19, "l": 31, "threads": 480, "life": 3, "botwr": 0.8867, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 53, "name": "Basic_33", "type": "basic", "diff": "normal", "s": 28, "m": 8, "l": 16, "threads": 320, "life": 3, "botwr": 0.5133, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 54, "name": "Basic_34", "type": "basic", "diff": "normal", "s": 18, "m": 16, "l": 16, "threads": 328, "life": 3, "botwr": 0.9467, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 55, "name": "Garage_12", "type": "garage", "diff": "normal", "s": 10, "m": 24, "l": 26, "threads": 444, "life": 3, "botwr": 0.4733, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 56, "name": "Basic_35", "type": "basic", "diff": "normal", "s": 10, "m": 30, "l": 14, "threads": 360, "life": 3, "botwr": 0.9333, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 57, "name": "Garage_13", "type": "garage", "diff": "hard", "s": 11, "m": 18, "l": 20, "threads": 352, "life": 3, "botwr": 0.17, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 58, "name": "Basic_36", "type": "basic", "diff": "normal", "s": 15, "m": 13, "l": 23, "threads": 368, "life": 3, "botwr": 0.6933, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 59, "name": "Conveyor_8", "type": "conveyor", "diff": "normal", "s": 35, "m": 18, "l": 22, "threads": 468, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 60, "name": "Basic_37", "type": "basic", "diff": "normal", "s": 10, "m": 15, "l": 19, "threads": 320, "life": 3, "botwr": 0.6933, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 61, "name": "Basic_38", "type": "basic", "diff": "superhard", "s": 14, "m": 6, "l": 26, "threads": 352, "life": 3, "botwr": 0.0833, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 62, "name": "Basic_39", "type": "basic", "diff": "easywin", "s": 10, "m": 14, "l": 19, "threads": 314, "life": 3, "botwr": 0.8633, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 63, "name": "Garage_14", "type": "garage", "diff": "normal", "s": 17, "m": 19, "l": 21, "threads": 392, "life": 3, "botwr": 0.7367, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 64, "name": "Mixed_2", "type": "mixed", "diff": "normal", "s": 19, "m": 19, "l": 20, "threads": 390, "life": 3, "botwr": 0.01, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 65, "name": "Basic_40", "type": "basic", "diff": "normal", "s": 12, "m": 16, "l": 30, "threads": 444, "life": 3, "botwr": 0.6333, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 66, "name": "Basic_41", "type": "basic", "diff": "normal", "s": 20, "m": 8, "l": 20, "threads": 328, "life": 3, "botwr": 0.77, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 67, "name": "Basic_42", "type": "basic", "diff": "hard", "s": 20, "m": 23, "l": 26, "threads": 478, "life": 3, "botwr": 0.1633, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 68, "name": "Basic_43", "type": "basic", "diff": "normal", "s": 8, "m": 17, "l": 24, "threads": 374, "life": 3, "botwr": 0.8033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 69, "name": "Basic_44", "type": "basic", "diff": "normal", "s": 9, "m": 21, "l": 14, "threads": 302, "life": 3, "botwr": 0.4133, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 70, "name": "Conveyor_9", "type": "conveyor", "diff": "normal", "s": 9, "m": 21, "l": 14, "threads": 302, "life": 3, "botwr": 0.0033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 71, "name": "Basic_45", "type": "basic", "diff": "superhard", "s": 22, "m": 18, "l": 22, "threads": 416, "life": 3, "botwr": 0.0167, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 72, "name": "Garage_15", "type": "garage", "diff": "easywin", "s": 23, "m": 15, "l": 14, "threads": 322, "life": 3, "botwr": 0.8833, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 73, "name": "Basic_46", "type": "basic", "diff": "normal", "s": 6, "m": 15, "l": 26, "threads": 374, "life": 3, "botwr": 0.6533, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 74, "name": "Garage_16", "type": "garage", "diff": "normal", "s": 18, "m": 12, "l": 18, "threads": 324, "life": 3, "botwr": 0.84, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 75, "name": "Basic_47", "type": "basic", "diff": "normal", "s": 14, "m": 18, "l": 22, "threads": 384, "life": 3, "botwr": 0.5467, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 76, "name": "Conveyor_10", "type": "conveyor", "diff": "normal", "s": 21, "m": 21, "l": 15, "threads": 360, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 77, "name": "Basic_48", "type": "basic", "diff": "hard", "s": 24, "m": 18, "l": 19, "threads": 394, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 78, "name": "Garage_17", "type": "garage", "diff": "normal", "s": 10, "m": 17, "l": 11, "threads": 252, "life": 3, "botwr": 0.61, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 79, "name": "Basic_49", "type": "basic", "diff": "normal", "s": 10, "m": 18, "l": 20, "threads": 348, "life": 3, "botwr": 0.3733, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 80, "name": "Basic_50", "type": "basic", "diff": "normal", "s": 10, "m": 18, "l": 17, "threads": 318, "life": 3, "botwr": 0.63, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 81, "name": "Garage_18", "type": "garage", "diff": "superhard", "s": 20, "m": 16, "l": 23, "threads": 406, "life": 3, "botwr": 0.1567, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 82, "name": "Basic_51", "type": "basic", "diff": "easywin", "s": 10, "m": 16, "l": 12, "threads": 256, "life": 3, "botwr": 0.8567, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 83, "name": "Basic_52", "type": "basic", "diff": "normal", "s": 15, "m": 17, "l": 10, "threads": 262, "life": 3, "botwr": 0.5667, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 84, "name": "Basic_53", "type": "basic", "diff": "normal", "s": 9, "m": 11, "l": 19, "threads": 292, "life": 3, "botwr": 0.65, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 85, "name": "Garage_19", "type": "garage", "diff": "normal", "s": 16, "m": 20, "l": 18, "threads": 364, "life": 3, "botwr": 0.6667, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 86, "name": "Basic_54", "type": "basic", "diff": "normal", "s": 13, "m": 21, "l": 10, "threads": 278, "life": 3, "botwr": 0.8033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 87, "name": "Basic_55", "type": "basic", "diff": "hard", "s": 16, "m": 18, "l": 18, "threads": 352, "life": 3, "botwr": 0.36, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 88, "name": "Conveyor_11", "type": "conveyor", "diff": "normal", "s": 26, "m": 22, "l": 16, "threads": 396, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 89, "name": "Basic_56", "type": "basic", "diff": "normal", "s": 16, "m": 12, "l": 18, "threads": 316, "life": 3, "botwr": 0.3633, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 90, "name": "Basic_57", "type": "basic", "diff": "normal", "s": 16, "m": 12, "l": 20, "threads": 336, "life": 3, "botwr": 0.92, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 91, "name": "Garage_20", "type": "garage", "diff": "superhard", "s": 24, "m": 17, "l": 29, "threads": 488, "life": 3, "botwr": 0.2067, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 92, "name": "Basic_58", "type": "basic", "diff": "easywin", "s": 7, "m": 12, "l": 21, "threads": 310, "life": 3, "botwr": 0.8567, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 93, "name": "Basic_59", "type": "basic", "diff": "normal", "s": 23, "m": 17, "l": 7, "threads": 264, "life": 3, "botwr": 0.6767, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 94, "name": "Garage_21", "type": "garage", "diff": "normal", "s": 10, "m": 18, "l": 16, "threads": 308, "life": 3, "botwr": 0.4367, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 95, "name": "Basic_60", "type": "basic", "diff": "normal", "s": 17, "m": 13, "l": 16, "threads": 306, "life": 3, "botwr": 0.26, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 96, "name": "Basic_61", "type": "basic", "diff": "normal", "s": 18, "m": 12, "l": 17, "threads": 314, "life": 3, "botwr": 0.7833, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 97, "name": "Garage_22", "type": "garage", "diff": "hard", "s": 12, "m": 18, "l": 20, "threads": 356, "life": 3, "botwr": 0.4367, "userswr": 0.4916, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 98, "name": "Basic_62", "type": "basic", "diff": "normal", "s": 8, "m": 21, "l": 13, "threads": 288, "life": 3, "botwr": 0.8333, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 99, "name": "Basic_63", "type": "basic", "diff": "normal", "s": 10, "m": 17, "l": 24, "threads": 382, "life": 3, "botwr": 0.2733, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 100, "name": "Garage_23", "type": "garage", "diff": "normal", "s": 25, "m": 22, "l": 22, "threads": 452, "life": 3, "botwr": 0.46, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 101, "name": "Garage_24", "type": "garage", "diff": "superhard", "s": 12, "m": 12, "l": 12, "threads": 240, "life": 3, "botwr": 0.0633, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 102, "name": "Basic_64", "type": "basic", "diff": "easywin", "s": 12, "m": 11, "l": 21, "threads": 324, "life": 3, "botwr": 0.8967, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 103, "name": "Basic_65", "type": "basic", "diff": "normal", "s": 17, "m": 14, "l": 27, "threads": 422, "life": 3, "botwr": 0.1533, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 104, "name": "Garage_25", "type": "garage", "diff": "normal", "s": 19, "m": 28, "l": 11, "threads": 354, "life": 3, "botwr": 0.79, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 105, "name": "Basic_66", "type": "basic", "diff": "normal", "s": 10, "m": 13, "l": 31, "threads": 428, "life": 3, "botwr": 0.6133, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 106, "name": "Basic_67", "type": "basic", "diff": "normal", "s": 19, "m": 15, "l": 15, "threads": 316, "life": 3, "botwr": 0.7733, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 107, "name": "Conveyor_12", "type": "conveyor", "diff": "hard", "s": 15, "m": 19, "l": 14, "threads": 314, "life": 3, "botwr": 0.0, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 108, "name": "Basic_68", "type": "basic", "diff": "normal", "s": 15, "m": 30, "l": 8, "threads": 320, "life": 3, "botwr": 0.8767, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "complex"}, {"n": 109, "name": "Garage_26", "type": "garage", "diff": "normal", "s": 17, "m": 19, "l": 9, "threads": 272, "life": 3, "botwr": 0.51, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}, {"n": 110, "name": "Basic_69", "type": "basic", "diff": "normal", "s": 14, "m": 18, "l": 22, "threads": 384, "life": 3, "botwr": 0.9033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 111, "name": "Garage_27", "type": "garage", "diff": "superhard", "s": 12, "m": 27, "l": 15, "threads": 360, "life": 3, "botwr": 0.2167, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": null, "shield": false, "subtype": "combined", "composition": "complex"}, {"n": 112, "name": "Garage_28", "type": "garage", "diff": "easywin", "s": 10, "m": 21, "l": 8, "threads": 246, "life": 3, "botwr": 0.9033, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "directional", "composition": "simple"}, {"n": 113, "name": "Basic_70", "type": "basic", "diff": "normal", "s": 11, "m": 22, "l": 21, "threads": 386, "life": 3, "botwr": 0.7033, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "complex"}, {"n": 114, "name": "Basic_71", "type": "basic", "diff": "normal", "s": 9, "m": 21, "l": 9, "threads": 252, "life": 3, "botwr": 0.7867, "userswr": null, "notes": "", "features": "", "freeze": null, "knock": 0.5, "shield": false, "subtype": "combined", "composition": "simple"}, {"n": 115, "name": "Garage_29", "type": "garage", "diff": "normal", "s": 21, "m": 12, "l": 15, "threads": 306, "life": 3, "botwr": 0.6333, "userswr": null, "notes": "", "features": "", "freeze": 0.5, "knock": null, "shield": false, "subtype": "diagonal", "composition": "simple"}];
+
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let LEVELS = [...BUILTIN_LEVELS];
+let sortField = null, sortDir = -1;
+let charts = {};
+let config = JSON.parse(localStorage.getItem('wq-config') || '{}');
+let levelAutoFilter = '';  // for Уровни 5.0 auto-tag filter
+
+// Manual editorial difficulty tags (Сложный / Супер Сложный), keyed by level number.
+// Levels import with tags from the sheet; user overrides persist here on top of each import.
+let diffOverrides = JSON.parse(localStorage.getItem('wq-diff-overrides') || '{}');
+function applyDiffOverrides(){ LEVELS.forEach(r => { if(diffOverrides[r.n] != null) r.diff = diffOverrides[r.n]; }); }
+
+// Set/clear a level's editorial difficulty tag and re-render every view that shows it.
+function setDiffTag(n, value){
+  const lvl = LEVELS.find(r => r.n === n); if(!lvl) return;
+  diffOverrides[n] = value;
+  lvl.diff = value;
+  localStorage.setItem('wq-diff-overrides', JSON.stringify(diffOverrides));
+  renderLevels();   // also refreshes the Levels-tab insights
+  if(typeof rendered !== 'undefined' && rendered.funnel){ renderPool(); renderLiveFunnel(); renderDraftFunnel(); }
+  // refresh the currently open saved-funnel tab, if any
+  const activeSaved = document.querySelector('.panel-saved.active');
+  if(activeSaved) renderSavedFunnel(activeSaved.id.replace('tab-',''));
+}
+function cycleDiffTag(e, n){
+  e.stopPropagation(); e.preventDefault();
+  const order = ['normal','hard','superhard'];           // easywin → normal at start of cycle
+  const lvl = LEVELS.find(r => r.n === n); if(!lvl) return;
+  const i = order.indexOf(lvl.diff);
+  setDiffTag(n, order[(i + 1) % order.length]);
+}
+// Dropdown for the Уровни table — precise control over all four states.
+function diffSelect(n, diff){
+  const opts = [['normal','—'],['easywin','Лёгкий'],['hard','Сложный'],['superhard','Супер сложный']];
+  return `<select class="diff-select diff-sel-${diff}" onchange="setDiffTag(${n}, this.value)" title="Тег сложности (можно менять вручную)">`
+    + opts.map(([v,l]) => `<option value="${v}"${v===diff?' selected':''}>${l}</option>`).join('')
+    + `</select>`;
+}
+// Compact clickable chip for funnel cards — click cycles the tag.
+function diffCycleBadge(n, diff){
+  if(diff==='superhard') return `<span class="badge b-superhard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы сменить тег">Супер Сложный</span>`;
+  if(diff==='hard')      return `<span class="badge b-hard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы сменить тег">Сложный</span>`;
+  return `<span class="diff-cycle diff-cycle-empty" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы поставить тег">+ тег</span>`;
+}
+
+// ─────────────────────────────────────────────
+//  GOOGLE SHEETS SYNC
+// ─────────────────────────────────────────────
+function saveConfig() {
+  config = {
+    sheetsId: document.getElementById('sheets-id').value.trim(),
+    apiKey: document.getElementById('api-key').value.trim(),
+    sheetLevels: document.getElementById('sheet-levels').value.trim()
+  };
+  localStorage.setItem('wq-config', JSON.stringify(config));
+  document.getElementById('config-overlay').classList.remove('open');
+  syncSheets();
+}
+
+async function syncSheets() {
+  if (!config.sheetsId) {
+    document.getElementById('config-overlay').classList.add('open');
+    return;
+  }
+  const btn = document.getElementById('sync-btn');
+  const status = document.getElementById('sync-status');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>...';
+  status.textContent = '';
+
+  try {
+    // Read sheet name from quick input (header bar) — always takes priority
+    const quickInput = document.getElementById('quick-sheet-name');
+    const sheetName = quickInput?.value?.trim() || config.sheetLevels || 'Levels 5.0';
+    // Sync back to config and persist, so last-used sheet is remembered on reload
+    config.sheetLevels = sheetName;
+    document.getElementById('sheet-levels').value = sheetName;
+    localStorage.setItem('wq-config', JSON.stringify(config));
+
+    const data = await fetchSheet(config.sheetsId, sheetName, config.apiKey);
+    if (data && data.length > 1) {
+      LEVELS = parseSheetLevels(data);
+      ensureMechanics(LEVELS); // guarantee mechanics[] on every level
+      applyDiffOverrides(); // re-apply manual Сложный/Супер Сложный tags on top of fresh import
+      document.getElementById('source-badge').innerHTML = `<span class="ds-sheets">⬤ ${sheetName}</span>`;
+      status.textContent = `✓ ${LEVELS.length} уровней · ${new Date().toLocaleTimeString('ru')}`;
+      renderLevels();
+    }
+  } catch(e) {
+    status.textContent = '⚠ ' + e.message.split('\n')[0];
+    console.error('Sync error:', e);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '↻ Обновить';
+}
+
+async function fetchSheet(id, sheetName, apiKey) {
+  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+  if (isLocal) {
+    // Use local server proxy to bypass Safari CORS/ITP blocks
+    const proxyUrl = `/--proxy-sheets?id=${encodeURIComponent(id)}&sheet=${encodeURIComponent(sheetName)}`;
+    const resp = await fetch(proxyUrl);
+    if (!resp.ok) throw new Error(`Прокси: HTTP ${resp.status}. Проверь что таблица расшарена.`);
+    const text = await resp.text();
+    if (text && text.length > 10) return parseCSV(text);
+    throw new Error('Пустой ответ от Google Sheets');
+  }
+
+  // Deployed (Netlify / non-localhost): try the serverless proxy first — avoids browser CORS
+  try {
+    const fnUrl = `/.netlify/functions/sheets?id=${encodeURIComponent(id)}&sheet=${encodeURIComponent(sheetName)}`;
+    const resp = await fetch(fnUrl);
+    if (resp.ok) {
+      const text = await resp.text();
+      if (text && text.length > 10) return parseCSV(text);
+    }
+  } catch(e) {
+    console.log('netlify function proxy failed:', e.message);
+  }
+
+  // Fallback: direct fetch (works only if Google returns CORS headers — often it doesn't)
+  const gvizUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  try {
+    const resp = await fetch(gvizUrl, { redirect: 'follow' });
+    if (resp.ok) {
+      const text = await resp.text();
+      if (text && text.length > 10) return parseCSV(text);
+    }
+  } catch(e) {
+    console.log('gviz failed:', e.message);
+  }
+
+  const exportUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&sheet=${encodeURIComponent(sheetName)}`;
+  try {
+    const resp2 = await fetch(exportUrl, { redirect: 'follow' });
+    if (resp2.ok) {
+      const text2 = await resp2.text();
+      if (text2 && text2.length > 10) return parseCSV(text2);
+    }
+  } catch(e2) {
+    console.log('export failed:', e2.message);
+  }
+
+  throw new Error('Не удалось загрузить. Проверь доступ к таблице.');
+}
+
+function parseCSV(text) {
+  // Proper RFC-4180 parser: handles quoted fields with embedded newlines and commas
+  const rows = [];
+  let row = [], cell = '', inQ = false, i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQ && text[i+1] === '"') { cell += '"'; i += 2; continue; } // escaped quote
+      inQ = !inQ; i++; continue;
+    }
+    if (c === ',' && !inQ) { row.push(cell.trim()); cell = ''; i++; continue; }
+    if ((c === '\n' || (c === '\r' && text[i+1] === '\n')) && !inQ) {
+      row.push(cell.trim()); cell = '';
+      if (row.some(x => x !== '')) rows.push(row);
+      row = [];
+      if (c === '\r') i++;
+      i++; continue;
+    }
+    // embedded line breaks inside a quoted field → collapse to a single space (never keep raw newlines)
+    if (c === '\r' && inQ) { i++; continue; }
+    if (c === '\n' && inQ) { if(cell && !cell.endsWith(' ')) cell += ' '; i++; continue; }
+    cell += c; i++;
+  }
+  if (cell || row.length) { row.push(cell.trim()); if (row.some(x => x !== '')) rows.push(row); }
+  return rows;
+}
+
+function parseSheetLevels(rows) {
+  // Find header row — look for "Level Number" or "level number"
+  let headerIdx = rows.findIndex(r => r.some(c => c.toLowerCase().replace(/\s+/g,'') === 'levelnumber'));
+  if (headerIdx < 0) headerIdx = 0;
+
+  // Flatten headers: strip newlines, lowercase, trim
+  const headers = rows[headerIdx].map(h => h.toLowerCase().replace(/[\n\r]+/g,' ').trim());
+
+  // Find column by partial match
+  const idx = name => headers.findIndex(h => h.includes(name.toLowerCase()));
+  // Exact or starts-with match
+  const idxExact = name => {
+    const n = name.toLowerCase();
+    let i = headers.findIndex(h => h === n);
+    if (i < 0) i = headers.findIndex(h => h.startsWith(n));
+    return i;
+  };
+
+  const iNum      = idx('level number');
+  const iName     = idx('level name');
+  const iS        = idxExact('small');
+  const iM        = headers.findIndex((h,i) => h === 'medium' && i > 2);
+  const iL        = idxExact('large');
+  const iThreads  = idxExact('threads');
+  const iLife     = idxExact('life');
+  const iBotWr    = idx('bot wr');
+  // Users WR — match "Users WR", "Users Win Rate", "User WR", Cyrillic; must contain "user/юзер/игрок" so it won't collide with "Bot WR"
+  const iUsersWr  = headers.findIndex(h => (h.includes('user') || h.includes('юзер') || h.includes('игрок')) && (h.includes('wr') || h.includes('win')));
+  const iDiff     = idx('сложность');
+  const iType     = idx('level type');
+  const iFeatures = idx('фичи');
+  const iTarget   = idx('target');
+  const iFreeze   = idx('freeze');
+  const iKnock    = idx('knock');
+  const iSubtype  = idx('subtype');
+  const iComp     = idx('composition');
+
+  // Debug: log found column indices
+  console.log('Sheet columns found:', {iNum,iName,iBotWr,iUsersWr,iType,iDiff,iSubtype,iComp});
+  console.log('Header[iBotWr]:', iBotWr >= 0 ? headers[iBotWr] : 'NOT FOUND');
+
+  const levels = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 3) continue;
+    const rawNum = r[iNum >= 0 ? iNum : 0];
+    const n = parseFloat(rawNum);
+    if (!n || isNaN(n)) continue;
+
+    const rawBotWr = iBotWr >= 0 ? r[iBotWr] : '';
+    const botwr = parseFloat(rawBotWr);
+
+    const rawUsersWr = iUsersWr >= 0 ? r[iUsersWr] : '';
+    const userswr = parseFloat(rawUsersWr);
+
+    const diffRaw = (iDiff >= 0 ? r[iDiff] : '').toLowerCase();
+    let diff = 'normal';
+    if (diffRaw.includes('супер') || diffRaw.includes('super')) diff = 'superhard';
+    else if (diffRaw.includes('сложн') || diffRaw.includes('hard')) diff = 'hard';
+    else if (diffRaw.includes('easy') || diffRaw.includes('изи')) diff = 'easywin';
+
+    const rawType = iType >= 0 ? (r[iType] || '') : 'basic';
+    const mechanics = parseMechanics(rawType);   // multi-choice → array of mechanics
+    const type = mechanics[0];                    // representative mechanic (back-compat)
+
+    // Subtype and composition — fall back to builtin data if blank
+    const rawSubtype = iSubtype >= 0 ? (r[iSubtype] || '').toLowerCase().trim() : '';
+    const rawComp    = iComp    >= 0 ? (r[iComp]    || '').toLowerCase().trim() : '';
+    const builtinMatch = BUILTIN_LEVELS.find(b => b.n === Math.round(n));
+    const subtype  = rawSubtype  || (builtinMatch ? builtinMatch.subtype  : 'directional');
+    const composition = rawComp || (builtinMatch ? builtinMatch.composition : 'simple');
+
+    // Target WR from the sheet (accepts "75", "75%", "0.75") → integer 0–100, or null
+    let target = null;
+    if(iTarget >= 0){ const t = parseFloat(String(r[iTarget]).replace('%','').trim()); if(!isNaN(t)) target = Math.max(0, Math.min(100, t<=1 ? Math.round(t*100) : Math.round(t))); }
+
+    levels.push({
+      n: Math.round(n),
+      name:    iName    >= 0 ? r[iName]    : '',
+      type,
+      mechanics,
+      target,
+      diff,
+      s:       iS       >= 0 ? (parseFloat(r[iS])    || 0) : 0,
+      m:       iM       >= 0 ? (parseFloat(r[iM])    || 0) : 0,
+      l:       iL       >= 0 ? (parseFloat(r[iL])    || 0) : 0,
+      threads: iThreads >= 0 ? (parseInt(r[iThreads])|| 0) : 0,
+      life:    iLife    >= 0 ? (parseInt(r[iLife])   || 1) : 1,
+      botwr:   isNaN(botwr)   ? null : (botwr > 1 ? botwr / 100 : botwr),  // empty = untested → null (NOT 0, NOT killer)
+      userswr: isNaN(userswr) ? null : (userswr > 1 ? userswr / 100 : userswr),
+      freeze:  iFreeze  >= 0 ? (parseFloat(r[iFreeze]) || null) : null,
+      knock:   iKnock   >= 0 ? (parseFloat(r[iKnock])  || null) : null,
+      subtype,
+      composition,
+      shield: false,
+      features: iFeatures >= 0 ? (r[iFeatures] || '') : (builtinMatch ? builtinMatch.features : ''),
+    });
+  }
+  console.log(`Parsed ${levels.length} levels from sheet. Sample botwr:`, levels.slice(0,5).map(l=>l.botwr));
+  return levels.length > 0 ? levels : BUILTIN_LEVELS;
+}
+
+// ─────────────────────────────────────────────
+//  RENDER LEVELS
+// ─────────────────────────────────────────────
+function diffBadge(d) {
+  if(d==='superhard') return '<span class="badge b-superhard">Супер Сложный</span>';
+  if(d==='hard') return '<span class="badge b-hard">Сложный</span>';
+  return '';  // normal — no badge, saves space
+}
+function autoWrTag(botwr) {
+  if(botwr == null)  return {cls:'', label:'',                key:'none'};   // untested — no tag
+  if(botwr < 0.10) return {cls:'b-wr-killer', label:'💀 Убийца',       key:'killer'};
+  if(botwr < 0.30) return {cls:'b-wr-vhard',  label:'🔥 Оч.сложный',  key:'vhard'};
+  if(botwr < 0.50) return {cls:'b-wr-hard',   label:'⚡ Сложный',     key:'hard'};
+  if(botwr < 0.70) return {cls:'b-wr-normal', label:'🎯 Нормальный',  key:'normal'};
+  if(botwr < 0.90) return {cls:'b-wr-easy',   label:'😊 Лёгкий',     key:'easy'};
+  return              {cls:'b-wr-izzy',   label:'⭐ Изи',          key:'izzy'};
+}
+function autoWrBadge(botwr) {
+  if(botwr == null) return '<span style="color:var(--text3)">—</span>';   // untested level
+  const t = autoWrTag(botwr);
+  return `<span class="badge b-auto ${t.cls}">${t.label}</span>`;
+}
+function typeBadge(t) {
+  if(t==='garage')   return '<span class="badge b-garage">garage</span>';
+  if(t==='conveyor') return '<span class="badge b-conveyor">conveyor</span>';
+  if(t==='mixed')    return '<span class="badge b-mixed">multiple</span>';
+  if(t==='tutorial') return '<span class="badge b-basic">tutorial</span>';
+  return '<span class="badge b-basic">basic</span>';
+}
+
+// ── Mechanics: a level can have several (the sheet's "Level Type" is multi-choice) ──
+const MECH_META = {
+  basic:    {label:'basic',    cls:'b-basic'},
+  garage:   {label:'garage',   cls:'b-garage'},
+  conveyor: {label:'conveyor', cls:'b-conveyor'},
+  mixed:    {label:'multiple', cls:'b-mixed'},
+  tutorial: {label:'tutorial', cls:'b-basic'}
+};
+function normMech(token){
+  const t = String(token==null?'':token).toLowerCase().trim();
+  if(!t) return null;
+  if(t.includes('туториал')||t.includes('tutorial')) return 'tutorial';
+  if(t.includes('конвей')||t.includes('conveyor')) return 'conveyor';
+  if(t.includes('гараж')||t.includes('garage')) return 'garage';
+  if(t.includes('basic')||t.includes('базов')||t.includes('обыч')) return 'basic';
+  if(t==='mixed'||t==='multiple'||t.includes('микс')||t.includes('мульти')) return 'mixed';
+  return t; // unknown custom mechanic kept verbatim as its own tag
+}
+function parseMechanics(raw){
+  if(Array.isArray(raw)) return raw.length ? [...new Set(raw)] : ['basic'];
+  const parts = String(raw==null?'':raw).split(/[,;/|\n]+/).map(normMech).filter(Boolean);
+  return parts.length ? [...new Set(parts)] : ['basic'];
+}
+// Make sure every level has a mechanics[] array (builtin levels only carry a single `type`)
+function ensureMechanics(levels){ levels.forEach(r=>{ if(!Array.isArray(r.mechanics)) r.mechanics = parseMechanics(r.type); }); }
+// Distinct mechanics present across a set of levels, ordered (known first, then custom alpha)
+function mechanicsPresent(rows){
+  const set = new Set(); rows.forEach(r=>(r.mechanics||[]).forEach(m=>set.add(m)));
+  const order = ['basic','garage','conveyor','mixed','tutorial'];
+  return [...set].sort((a,b)=>{ const ia=order.indexOf(a), ib=order.indexOf(b); if(ia<0&&ib<0) return a<b?-1:1; if(ia<0) return 1; if(ib<0) return -1; return ia-ib; });
+}
+function mechBadge(m){ const meta=MECH_META[m]; return meta ? `<span class="badge ${meta.cls}">${meta.label}</span>` : `<span class="badge b-mech-custom">${m}</span>`; }
+function mechBadges(r){ const ms=(r.mechanics&&r.mechanics.length)?r.mechanics:[r.type||'basic']; return ms.map(mechBadge).join(' '); }
+function wrColor(v) {
+  if(v==null) return '';
+  if(v>=0.75) return 'wr-good'; if(v>=0.5) return 'wr-ok'; return 'wr-bad';
+}
+
+function setLevelAutoFilter(key) {
+  levelAutoFilter = key;
+  document.querySelectorAll('.lf-auto-btn').forEach(b => b.classList.remove('lf-active'));
+  document.getElementById('lf-'+(key||'all'))?.classList.add('lf-active');
+  renderLevels();
+}
+
+// One table row for a level — shared by the Levels tab and saved-funnel tabs
+function levelRowHTML(r){
+  const hasBot = r.botwr != null;
+  const bwr = hasBot ? Math.round(r.botwr*100) : null;
+  const uwr = r.userswr ? Math.round(r.userswr*100) : null;
+  const barW = hasBot ? Math.round(r.botwr*56) : 0;
+  return `<tr>
+      <td style="color:var(--text3);font-size:11px">${r.n}</td>
+      <td style="font-weight:500">${r.name}</td>
+      <td><div class="mech-cap">${mechBadges(r)}</div></td>
+      <td>${diffSelect(r.n, r.diff)}</td>
+      <td>${autoWrBadge(r.botwr)}</td>
+      <td style="font-size:11px;color:var(--text2)">${r.subtype||'—'}</td>
+      <td style="font-size:11px;color:var(--text2)">${r.composition||'—'}</td>
+      <td>${r.threads}</td>
+      <td style="white-space:nowrap">${hasBot ? `
+        <span style="display:inline-block;width:${barW}px;height:5px;background:${r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A'};border-radius:3px;vertical-align:middle;margin-right:5px"></span>
+        <span class="${wrColor(r.botwr)}">${bwr}%</span>` : '<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td><span class="${wrColor(r.userswr)}">${uwr!=null?uwr+'%':'—'}</span></td>
+      <td style="font-size:11px"><div class="feat-cap" title="${String(r.features||'').replace(/"/g,'&quot;')}">${r.features ? `<span style="color:var(--accent)">${r.features}</span>` : '<span style="color:var(--text3)">—</span>'}</div></td>
+    </tr>`;
+}
+
+// Average Bot WR (%) over a set, ignoring untested (null) levels. Returns string '12.3' or '—'.
+function avgBotPct(arr){ const v = arr.filter(r=>r.botwr!=null); return v.length ? (v.reduce((s,r)=>s+r.botwr,0)/v.length*100).toFixed(1) : '—'; }
+
+// Metrics block (inner .metric divs) — shared by the Levels tab and saved-funnel tabs
+function levelMetricsHTML(data, total){
+  const avgBot = avgBotPct(data);
+  const withUWR = data.filter(r=>r.userswr);
+  const avgUser = withUWR.length ? (withUWR.reduce((s,r)=>s+r.userswr,0)/withUWR.length*100).toFixed(1) : '—';
+  const normals = data.filter(r=>r.diff==='normal');
+  const hards   = data.filter(r=>r.diff==='hard');
+  const shards  = data.filter(r=>r.diff==='superhard');
+  const avgNorm = avgBotPct(normals);
+  const avgHard = avgBotPct(hards);
+  const avgSH   = avgBotPct(shards);
+  return `
+    <div class="metric"><div class="metric-label">Уровней</div><div class="metric-value">${data.length}</div><div class="metric-sub">всего ${total}</div></div>
+    <div class="metric"><div class="metric-label">Avg Bot WR</div><div class="metric-value">${avgBot}%</div></div>
+    <div class="metric"><div class="metric-label">Avg Users WR</div><div class="metric-value">${avgUser}%</div></div>
+    <div class="metric"><div class="metric-label">Нормальные</div><div class="metric-value">${normals.length}</div><div class="metric-sub">avg bot WR ${avgNorm}%</div></div>
+    <div class="metric"><div class="metric-label">Сложные</div><div class="metric-value">${hards.length}</div><div class="metric-sub" style="color:${parseFloat(avgHard)>parseFloat(avgNorm)?'#A32D2D':''}">avg bot WR ${avgHard}%${parseFloat(avgHard)>parseFloat(avgNorm)?' ⚠':''}</div></div>
+    <div class="metric"><div class="metric-label">Супер сложные</div><div class="metric-value">${shards.length}</div><div class="metric-sub" style="color:${parseFloat(avgSH)>parseFloat(avgHard)||parseFloat(avgSH)>parseFloat(avgNorm)?'#A32D2D':''}">avg bot WR ${avgSH}%${parseFloat(avgSH)>parseFloat(avgHard)||parseFloat(avgSH)>parseFloat(avgNorm)?' ⚠':''}</div></div>
+  `;
+}
+
+// Full levels table (with optional sort buttons) — used by saved-funnel tabs
+function levelsTableHTML(rows, sortable){
+  const sb = (f,lbl)=> sortable ? `${lbl} <button class="sort-btn" onclick="sortBy('${f}')">▲▼</button>` : lbl;
+  return `<div class="table-wrap"><table class="lvl-table"><thead><tr>
+    <th>${sb('n','№')}</th>
+    <th>Название</th>
+    <th>Тип</th>
+    <th style="white-space:nowrap">Сложность</th>
+    <th style="white-space:nowrap">Авто-тег <span style="font-size:9px;color:var(--text3);font-weight:400">(Bot WR)</span></th>
+    <th>Subtype</th>
+    <th>Composition</th>
+    <th>${sb('threads','Нитки')}</th>
+    <th>${sb('botwr','Bot WR')}</th>
+    <th>${sb('userswr','Users WR')}</th>
+    <th style="min-width:170px">Фичи</th>
+  </tr></thead><tbody>${rows.map(levelRowHTML).join('')}</tbody></table></div>`;
+}
+
+// Average Bot WR by mechanic WITHIN each difficulty — info table. Shared by Levels tab & saved funnels.
+function mechBreakdownHTML(rows){
+  const diffs = [
+    {key:'easywin',  label:'Лёгкие'},
+    {key:'normal',   label:'Нормальные'},
+    {key:'hard',     label:'Сложные'},
+    {key:'superhard',label:'Супер сложные'}
+  ].filter(d=>rows.some(r=>r.diff===d.key));
+  const mechs = mechanicsPresent(rows);
+  const avgPct = arr => { const v=arr.filter(r=>r.botwr!=null); return v.length ? (v.reduce((s,r)=>s+r.botwr,0)/v.length*100) : null; };
+  const cell = arr => {
+    const a = avgPct(arr);
+    if(a==null) return `<td style="text-align:center;color:var(--text3)">—</td>`;
+    const col = a>=75?'#1D9E75':a>=50?'#BA7517':'#E24B4A';
+    return `<td style="text-align:center;white-space:nowrap"><span style="color:${col};font-weight:600">${a.toFixed(0)}%</span> <span style="color:var(--text3);font-size:10px">(${arr.length})</span></td>`;
+  };
+  const head = `<tr><th style="text-align:left">Сложность</th><th style="text-align:center">Всего</th>${mechs.map(m=>`<th style="text-align:center">${MECH_META[m]?MECH_META[m].label:m}</th>`).join('')}</tr>`;
+  const body = diffs.map(d=>{
+    const dl = rows.filter(r=>r.diff===d.key);
+    return `<tr><td style="font-weight:500">${d.label}</td>${cell(dl)}${mechs.map(m=>cell(dl.filter(r=>(r.mechanics||[]).includes(m)))).join('')}</tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">В ячейке — средний Bot WR и (число уровней). Уровень с несколькими механиками учитывается в каждой своей колонке, поэтому суммы по строке могут превышать «Всего».</div>`;
+}
+
+function renderLevels() {
+  const typeF = document.getElementById('f-type').value;
+  const diffF = document.getElementById('f-diff').value;
+  const wrF = parseFloat(document.getElementById('f-wr').value)/100;
+
+  let data = LEVELS.filter(r => {
+    if(typeF && !(r.mechanics||[]).includes(typeF)) return false;
+    if(diffF==='normal' && r.diff!=='normal') return false;
+    if(diffF==='hard' && r.diff!=='hard') return false;
+    if(diffF==='superhard' && r.diff!=='superhard') return false;
+    if(r.botwr < wrF) return false;
+    if(levelAutoFilter && autoWrTag(r.botwr).key !== levelAutoFilter) return false;
+    return true;
+  });
+  if(sortField) data = [...data].sort((a,b)=>(a[sortField]-(b[sortField]||0))*sortDir);
+
+  document.getElementById('levels-tbody').innerHTML = data.map(levelRowHTML).join('');
+  document.getElementById('level-metrics').innerHTML = levelMetricsHTML(data, LEVELS.length);
+
+  // Bottom analytics — over ALL levels, in sheet (live funnel) order
+  document.getElementById('levels-mechbreak').innerHTML = mechBreakdownHTML(LEVELS);
+  const ins = buildInsights(LEVELS);
+  document.getElementById('levels-insights-metrics').innerHTML = ins.metricsHTML;
+  document.getElementById('levels-insights-body').innerHTML = ins.bodyHTML;
+}
+
+function sortBy(f) {
+  if(sortField===f) sortDir*=-1; else { sortField=f; sortDir=-1; }
+  renderLevels();
+}
+
+// ─────────────────────────────────────────────
+//  INSIGHTS — auto-generated conclusions about the balance
+// ─────────────────────────────────────────────
+// Build insights for an ordered list of levels (progression order). Returns {metricsHTML, bodyHTML}.
+// Used both for the Levels tab (all levels in sheet order) and for each saved funnel (its own order).
+function buildInsights(orderedRows){
+  const L = orderedRows.filter(r=>r.type!=='tutorial');      // analytics exclude tutorial
+  const seq = orderedRows;                                    // progression order as given
+  const pct = x => (x==null) ? '—' : (x*100).toFixed(1);
+  const avg = arr => { const v=arr.filter(r=>r.botwr!=null); return v.length ? v.reduce((s,r)=>s+r.botwr,0)/v.length : null; };
+  const card = (sev,icon,title,text)=>`<div class="ins-card ins-${sev}"><div class="ins-icon">${icon}</div><div class="ins-content"><div class="ins-title">${title}</div><div class="ins-text">${text}</div></div></div>`;
+  const lvls = arr => arr.map(r=>'#'+r.n).join(', ');
+  const lvlsCap = (arr,k=10)=> arr.slice(0,k).map(r=>'#'+r.n).join(', ')+(arr.length>k?` … (+${arr.length-k})`:'');
+
+  if(!L.length){ return { metricsHTML:'', bodyHTML:'<div class="ins-text">Нет данных для анализа.</div>' }; }
+
+  const avgBot = avg(L);
+  const withU = L.filter(r=>r.userswr!=null);
+  const avgUser = withU.length ? withU.reduce((s,r)=>s+r.userswr,0)/withU.length : null;
+  const killers = L.filter(r=>r.botwr!=null && r.botwr<0.10);
+
+  // difficulty cliffs — sharp WR drop between adjacent levels (skip untested)
+  const cliffs=[];
+  for(let i=1;i<seq.length;i++){
+    if(seq[i].type==='tutorial'||seq[i-1].type==='tutorial') continue;
+    if(seq[i].botwr==null||seq[i-1].botwr==null) continue;
+    const d = seq[i-1].botwr - seq[i].botwr;
+    if(d>=0.5) cliffs.push({a:seq[i-1],b:seq[i],drop:d});
+  }
+
+  const metricsHTML = `
+    <div class="metric"><div class="metric-label">Средний Bot WR</div><div class="metric-value">${pct(avgBot)}%</div><div class="metric-sub">${L.length} уровней</div></div>
+    <div class="metric"><div class="metric-label">Средний Users WR</div><div class="metric-value">${avgUser!=null?pct(avgUser)+'%':'—'}</div><div class="metric-sub">${withU.length} с данными</div></div>
+    <div class="metric"><div class="metric-label">Уровней-«убийц»</div><div class="metric-value">${killers.length}</div><div class="metric-sub">Bot WR &lt; 10%</div></div>
+    <div class="metric"><div class="metric-label">Резких скачков</div><div class="metric-value">${cliffs.length}</div><div class="metric-sub">падение WR ≥ 50 пп</div></div>
+  `;
+
+  const sections = [];
+
+  // ═══ Сложность и баланс ═══
+  const s1=[];
+  if(killers.length) s1.push(card(killers.length>10?'crit':'warn','💀',
+    `${killers.length} уровней-«убийц» (Bot WR < 10%)`,
+    `Бот почти не проходит: <b>${lvlsCap(killers)}</b>. Это главные кандидаты на точки оттока.`));
+  if(cliffs.length) s1.push(card(cliffs.length>5?'crit':'warn','📉',
+    `${cliffs.length} резких скачков сложности`,
+    `Падение Bot WR ≥ 50 пп между соседями: ${cliffs.slice(0,6).map(c=>`<b>#${c.a.n}→#${c.b.n}</b> (−${Math.round(c.drop*100)}пп)`).join(', ')}. Резкие стены повышают отток — стоит добавить промежуточные уровни.`));
+  const hiddenHard = L.filter(r=>r.diff==='normal'&&r.botwr!=null&&r.botwr<0.15);
+  if(hiddenHard.length) s1.push(card('warn','🏷️',
+    `${hiddenHard.length} «нормальных», но фактически очень сложных`,
+    `Размечены как normal, но Bot WR < 15%: <b>${lvlsCap(hiddenHard)}</b>. Проверь редакторскую разметку сложности.`));
+  const easySuper = L.filter(r=>(r.diff==='hard'||r.diff==='superhard')&&r.botwr!=null&&r.botwr>0.7);
+  if(easySuper.length) s1.push(card('info','🎈',
+    `${easySuper.length} «сложных», но фактически лёгких`,
+    `Размечены hard/superhard, но Bot WR > 70%: <b>${lvlsCap(easySuper)}</b>. Можно усилить или переразметить.`));
+  const deltas=[]; for(let i=1;i<seq.length;i++){ if(seq[i].type==='tutorial'||seq[i-1].type==='tutorial')continue; if(seq[i].botwr==null||seq[i-1].botwr==null)continue; deltas.push(Math.abs(seq[i-1].botwr-seq[i].botwr)); }
+  const avgDelta = deltas.length? deltas.reduce((a,b)=>a+b,0)/deltas.length:0;
+  s1.push(card(avgDelta>0.3?'warn':'good', avgDelta>0.3?'🎢':'📈',
+    `Кривая сложности ${avgDelta>0.3?'«пилит»':'относительно плавная'}`,
+    `Средний скачок Bot WR между соседними уровнями — <b>${Math.round(avgDelta*100)} пп</b>. ${avgDelta>0.3?'Игрока бросает между лёгким и сложным — это утомляет.':'Хороший признак ровного прогресса.'}`));
+  sections.push(['Сложность и баланс', s1]);
+
+  // ═══ Воронка и порядок ═══
+  const s2=[];
+  const early = seq.filter(r=>r.type!=='tutorial').slice(0,10);   // first 10 positions in the progression
+  const earlyHard = early.filter(r=>r.botwr!=null&&r.botwr<0.3);
+  if(earlyHard.length) s2.push(card('crit','🚪',
+    `Жёсткие уровни в первой десятке`,
+    `Среди первых 10 уровней есть стены (Bot WR < 30%): <b>${lvls(earlyHard)}</b>. Ранний отток самый дорогой — стоит смягчить старт.`));
+  else s2.push(card('good','🚪',`Мягкий онбординг`,`В первых 10 уровнях нет стен (Bot WR < 30%) — игрок успевает втянуться.`));
+  let runs=[],cur=[];
+  for(const r of seq){ if(r.type==='tutorial')continue; if(r.botwr!=null&&r.botwr<0.3) cur.push(r); else { if(cur.length>=2)runs.push(cur); cur=[]; } }
+  if(cur.length>=2)runs.push(cur);
+  if(runs.length) s2.push(card('warn','🧱',
+    `${runs.length} серий сложных уровней подряд`,
+    `Идут ≥2 трудных уровня без передышки: ${runs.slice(0,5).map(run=>`<b>${run[0].n}–${run[run.length-1].n}</b>`).join(', ')}. Чередуй сложные с лёгкими, чтобы не выжигать игрока.`));
+  let eruns=[],ecur=[];
+  for(const r of seq){ if(r.type==='tutorial')continue; if(r.botwr!=null&&r.botwr>0.85) ecur.push(r); else { if(ecur.length>=4)eruns.push(ecur); ecur=[]; } }
+  if(ecur.length>=4)eruns.push(ecur);
+  if(eruns.length) s2.push(card('info','😴',
+    `${eruns.length} затяжных лёгких участков`,
+    `≥4 очень лёгких уровня подряд (Bot WR > 85%): ${eruns.slice(0,5).map(run=>`<b>${run[0].n}–${run[run.length-1].n}</b>`).join(', ')}. Может быть скучно — добавь вызов.`));
+  sections.push(['Воронка и порядок прохождения', s2]);
+
+  // ═══ Типы и механики ═══
+  const s3=[];
+  const typeStats = mechanicsPresent(L).map(t=>{const arr=L.filter(r=>(r.mechanics||[]).includes(t));return{t,arr,avg:avg(arr)};}).filter(x=>x.avg!=null);
+  if(typeStats.length){
+    const sorted=[...typeStats].sort((a,b)=>a.avg-b.avg);
+    const hardest=sorted[0], easiest=sorted[sorted.length-1];
+    s3.push(card('info','🧩',
+      `Самая сложная механика — ${hardest.t}`,
+      `Средний Bot WR: ${sorted.map(x=>`<b>${x.t}</b> ${pct(x.avg)}%`).join(' · ')}. Разрыв между ${hardest.t} и ${easiest.t} — ${Math.round((easiest.avg-hardest.avg)*100)} пп.`));
+  }
+  const conv=L.filter(r=>(r.mechanics||[]).includes('conveyor'));
+  if(conv.length){
+    const convBot=avg(conv), convU=conv.filter(r=>r.userswr!=null);
+    const convUAvg=convU.length?convU.reduce((s,r)=>s+r.userswr,0)/convU.length:null;
+    if(convBot!=null && convBot<0.1 && convUAvg!=null && convUAvg>0.4)
+      s3.push(card('warn','🤖',
+        `Бот не умеет в conveyor`,
+        `На conveyor Bot WR ≈ <b>${pct(convBot)}%</b>, а Users WR ≈ <b>${pct(convUAvg)}%</b>. Это слепое пятно бота, а не реальная сложность — не ориентируйся на Bot WR для conveyor.`));
+  }
+  const simp=L.filter(r=>r.composition==='simple'), comp=L.filter(r=>r.composition==='complex');
+  if(avg(simp)!=null && avg(comp)!=null){
+    const ds=avg(simp)-avg(comp);
+    s3.push(card('info','🧱',
+      `Complex-раскладки тяжелее на ${Math.round(ds*100)} пп`,
+      `simple: <b>${pct(avg(simp))}%</b> (${simp.length} ур.) против complex: <b>${pct(avg(comp))}%</b> (${comp.length} ур.).`));
+  }
+  const subStats=['directional','diagonal','combined'].map(st=>{const arr=L.filter(r=>r.subtype===st);return{st,arr,avg:avg(arr)};}).filter(x=>x.avg!=null);
+  if(subStats.length>1){
+    const sorted=[...subStats].sort((a,b)=>a.avg-b.avg);
+    s3.push(card('info','↗️',`Подтипы по сложности`,
+      `Средний Bot WR: ${sorted.map(x=>`<b>${x.st}</b> ${pct(x.avg)}%`).join(' · ')}.`));
+  }
+  sections.push(['Типы и механики', s3]);
+
+  // ═══ Боты vs живые игроки ═══
+  const s4=[];
+  const botBlind=L.filter(r=>r.botwr!=null && r.botwr<0.05 && r.userswr!=null && r.userswr>0.4);
+  if(botBlind.length) s4.push(card('warn','👻',
+    `${botBlind.length} уровней, где бот «слепой»`,
+    `Bot WR < 5%, но игроки проходят (Users WR > 40%): <b>${lvlsCap(botBlind)}</b>. Bot WR тут занижен — реальная сложность ниже.`));
+  const userHard=L.filter(r=>r.userswr!=null && r.userswr<0.4 && r.botwr!=null && r.botwr>0.6);
+  if(userHard.length) s4.push(card('crit','🧑‍🎤',
+    `${userHard.length} уровней, тяжёлых для живых игроков`,
+    `Users WR < 40%, хотя бот проходит легко (Bot WR > 60%): <b>${lvlsCap(userHard)}</b>. Бот не ловит проблему — приоритет на ручную проверку.`));
+  if(avgUser!=null && avgBot!=null){
+    const gap=avgUser-avgBot;
+    s4.push(card('info','⚖️',
+      `Игроки в среднем ${gap>=0?'сильнее':'слабее'} бота на ${Math.abs(Math.round(gap*100))} пп`,
+      `Средний Users WR <b>${pct(avgUser)}%</b> против Bot WR <b>${pct(avgBot)}%</b> (по уровням с данными игроков).`));
+  }
+  sections.push(['Боты vs живые игроки', s4]);
+
+  const bodyHTML = sections.filter(([,cards])=>cards.length).map(([title,cards])=>
+    `<div class="ins-section"><div class="ins-section-title">${title}</div><div class="ins-grid">${cards.join('')}</div></div>`
+  ).join('');
+  return { metricsHTML, bodyHTML };
+}
+
+// ─────────────────────────────────────────────
+//  TAB ROUTING
+// ─────────────────────────────────────────────
+const rendered = {};
+function showTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(!rendered[id]||id==='levels'||id.startsWith('sf')) {
+    if(id==='funnel') funnelInit();
+    if(id.startsWith('sf')) renderSavedFunnel(id);
+    rendered[id]=true;
+  }
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+if(config.sheetsId) {
+  document.getElementById('sheets-id').value = config.sheetsId;
+  document.getElementById('api-key').value = config.apiKey||'';
+  document.getElementById('sheet-levels').value = config.sheetLevels||'Levels 5.0';
+  document.getElementById('quick-sheet-name').value = config.sheetLevels||'Levels 5.0';
+  // Auto-load last-used sheet on open, so we don't show stale built-in data
+  syncSheets();
+}
+ensureMechanics(LEVELS); // guarantee mechanics[] on built-in/initial data
+applyDiffOverrides(); // apply saved manual tags to the built-in/initial data
+renderLevels();
+
+
+
+
+let draftFunnel = [];
+let liveFunnel = [];
+
+// Position-pinned funnel landmarks, keyed by funnel position number → ARRAY of strings (several per position).
+// A position can hold multiple landmarks; they stay on their position regardless of which level sits there.
+// Landmarks are objects {t: text, c: color}. Migrate older formats (single string / array of strings).
+let funnelLandmarks = JSON.parse(localStorage.getItem('wq-funnel-landmarks') || '{}');
+for(const k in funnelLandmarks){
+  let arr = funnelLandmarks[k];
+  if(typeof arr === 'string') arr = arr ? [arr] : [];
+  funnelLandmarks[k] = (arr||[]).map(it => typeof it === 'string'
+    ? {t: it, c: it==='Сложный'?'#BA7517' : it==='Супер Сложный'?'#E24B4A' : ''}
+    : it);
+}
+function persistLandmarks(){ localStorage.setItem('wq-funnel-landmarks', JSON.stringify(funnelLandmarks)); }
+
+const LM_PALETTE = ['#4a3fa8','#1D9E75','#BA7517','#E24B4A','#185FA5','#993556','#0E7C7B','#C77DBB','#E08A1E','#5B6770'];
+
+// quick-add a difficulty tag with its colour (no editor)
+function addLandmarkTag(pos, text){
+  if(!funnelLandmarks[pos]) funnelLandmarks[pos] = [];
+  funnelLandmarks[pos].push({t:text, c: text==='Сложный'?'#BA7517' : text==='Супер Сложный'?'#E24B4A' : ''});
+  persistLandmarks(); renderDraftFunnel();
+}
+
+// ── Landmark editor popover (text + colour palette) ──
+let lmPop = {pos:null, idx:null, color:''};
+function addLandmark(pos, ev){ openLmEditor(pos, null, ev.currentTarget); }
+function editLandmark(pos, idx, ev){ ev.stopPropagation(); openLmEditor(pos, idx, ev.currentTarget); }
+function openLmEditor(pos, idx, anchor){
+  const cur = (idx!=null && funnelLandmarks[pos] && funnelLandmarks[pos][idx]) ? funnelLandmarks[pos][idx] : {t:'', c:LM_PALETTE[0]};
+  lmPop = {pos, idx, color: cur.c || LM_PALETTE[0]};
+  document.getElementById('lm-pop-text').value = cur.t || '';
+  document.getElementById('lm-pop-del').style.display = (idx!=null) ? '' : 'none';
+  renderLmPalette();
+  const pop = document.getElementById('lm-pop');
+  pop.style.display = 'block';
+  const r = anchor.getBoundingClientRect();
+  const pw = pop.offsetWidth, ph = pop.offsetHeight, vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  let left = r.left, top = r.bottom + 4;
+  if(left + pw > vw - 8) left = vw - pw - 8;
+  if(top + ph > vh - 8) top = r.top - ph - 4;
+  pop.style.left = (left + window.scrollX) + 'px';
+  pop.style.top  = (Math.max(8, top) + window.scrollY) + 'px';
+  setTimeout(()=>document.getElementById('lm-pop-text').focus(), 0);
+}
+function renderLmPalette(){
+  document.getElementById('lm-pop-palette').innerHTML = LM_PALETTE.map(c =>
+    `<span class="lm-swatch${c===lmPop.color?' sel':''}" style="background:${c}" title="${c}" onclick="lmPop.color='${c}';renderLmPalette()"></span>`
+  ).join('');
+}
+function closeLmEditor(){ const p=document.getElementById('lm-pop'); if(p) p.style.display='none'; lmPop={pos:null,idx:null,color:''}; }
+function saveLmEditor(){
+  const text = document.getElementById('lm-pop-text').value.trim();
+  const {pos, idx, color} = lmPop;
+  if(pos==null) return;
+  if(!funnelLandmarks[pos]) funnelLandmarks[pos] = [];
+  if(idx!=null){
+    if(text) funnelLandmarks[pos][idx] = {t:text, c:color};
+    else { funnelLandmarks[pos].splice(idx,1); if(!funnelLandmarks[pos].length) delete funnelLandmarks[pos]; }
+  } else if(text){
+    funnelLandmarks[pos].push({t:text, c:color});
+  }
+  persistLandmarks(); closeLmEditor(); renderDraftFunnel();
+}
+function deleteLmEditor(){
+  const {pos, idx} = lmPop;
+  if(idx!=null && funnelLandmarks[pos]){ funnelLandmarks[pos].splice(idx,1); if(!funnelLandmarks[pos].length) delete funnelLandmarks[pos]; persistLandmarks(); }
+  closeLmEditor(); renderDraftFunnel();
+}
+
+// A landmark chip can be dragged to another position's cell (moves it there). lmDrag is set only mid-drag.
+let lmDrag = null;
+function landmarkDragStart(e, pos, idx){
+  e.stopPropagation();            // don't start a level-card drag
+  lmDrag = {pos, idx};
+  e.dataTransfer.setData('lm', '1');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function landmarkCellDragOver(e){
+  if(!lmDrag) return;             // not a landmark drag → let it bubble to the card
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.add('lm-over');
+}
+function landmarkDrop(e, toPos){
+  if(!lmDrag) return;            // not a landmark drag
+  e.preventDefault(); e.stopPropagation();
+  const {pos, idx} = lmDrag;
+  const srcArr = funnelLandmarks[pos] || [];
+  const item = srcArr.splice(idx, 1)[0];
+  if(item !== undefined && pos !== toPos){
+    if(!funnelLandmarks[toPos]) funnelLandmarks[toPos] = [];
+    funnelLandmarks[toPos].push(item);
+    if(srcArr.length === 0) delete funnelLandmarks[pos];
+    persistLandmarks();
+  } else if(item !== undefined){
+    srcArr.splice(idx, 0, item); // dropped on same cell → no-op, restore
+  }
+  lmDrag = null;
+  renderDraftFunnel();
+}
+function landmarkDragEnd(){
+  lmDrag = null;
+  document.querySelectorAll('.fc-lmcell.lm-over').forEach(x => x.classList.remove('lm-over'));
+}
+
+// Target WR — a fixed reference ladder keyed by position. Independent of levels: never moves when levels do.
+let funnelTargets = JSON.parse(localStorage.getItem('wq-funnel-targets') || '{}');
+function tgtColor(t){ return (t==null) ? '' : (t>=75?'#1D9E75':t>=50?'#BA7517':'#E24B4A'); }
+// Target for a funnel position: manual override wins, otherwise the imported "Target" column (by sheet/live position)
+function targetForPos(pos){
+  if(funnelTargets[pos] != null) return funnelTargets[pos];
+  const lvl = LEVELS[pos-1];
+  return (lvl && lvl.target != null) ? lvl.target : null;
+}
+function setTarget(pos, el){
+  const v = el.value.trim(), num = parseFloat(v);
+  if(v === '' || isNaN(num)){ delete funnelTargets[pos]; const imp = targetForPos(pos); el.value = imp==null?'':imp; el.style.color = tgtColor(imp); }
+  else { const t = Math.max(0, Math.min(100, Math.round(num))); funnelTargets[pos] = t; el.value = t; el.style.color = tgtColor(t); }
+  localStorage.setItem('wq-funnel-targets', JSON.stringify(funnelTargets));
+  // no re-render — keep input focus for fast sequential entry
+}
+
+let dragSrcIdx = null;
+
+function funnelInit() {
+  liveFunnel = LEVELS.map(r => r.n);
+  const saved = localStorage.getItem('wq-draft-funnel');
+  if (saved) { try { draftFunnel = JSON.parse(saved); } catch(e) { draftFunnel = [...liveFunnel]; } }
+  else { draftFunnel = [...liveFunnel]; }
+  // reset filters
+  poolFilterType = ''; poolFilterWr = ''; poolWrMin = 0; poolWrMax = 100;
+  poolFilterSubtype = ''; poolFilterComp = '';
+  ['pf-subtype','pf-comp'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('pf-all')?.classList.add('pf-active');
+  renderPool(); renderLiveFunnel(); renderDraftFunnel(); updateFunnelMetrics();
+}
+
+let poolFilterType = '';
+let poolFilterWr = '';
+let poolFilterSubtype = '';
+let poolFilterComp = '';
+let poolWrMin = 0;    // 0–100
+let poolWrMax = 100;  // 0–100
+
+function setPoolSelect(dim, val){
+  if(dim==='subtype') poolFilterSubtype = val;
+  if(dim==='comp')    poolFilterComp = val;
+  renderPool();
+}
+
+function onPoolWrRange() {
+  let mn = parseInt(document.getElementById('pool-wr-min').value);
+  let mx = parseInt(document.getElementById('pool-wr-max').value);
+  if(mn > mx) { // swap if crossed
+    const tmp = mn; mn = mx; mx = tmp;
+    document.getElementById('pool-wr-min').value = mn;
+    document.getElementById('pool-wr-max').value = mx;
+  }
+  poolWrMin = mn; poolWrMax = mx;
+  document.getElementById('pool-wr-range-label').textContent = `${mn}% – ${mx}%`;
+  // clear category WR button when using slider
+  poolFilterWr = '';
+  ['killer','vhard','hard-wr','normal-wr','easy-wr','izzy-wr','wr-all'].forEach(id =>
+    document.getElementById('pf-'+id)?.classList.remove('pf-active'));
+  renderPool();
+}
+
+function setPoolFilter(dim, val) {
+  if (dim === 'type') poolFilterType = val;
+  if (dim === 'wr') {
+    poolFilterWr = val;
+    // reset range slider to full when using category buttons
+    poolWrMin = 0; poolWrMax = 100;
+    const minEl = document.getElementById('pool-wr-min');
+    const maxEl = document.getElementById('pool-wr-max');
+    if(minEl) minEl.value = 0;
+    if(maxEl) maxEl.value = 100;
+    const lbl = document.getElementById('pool-wr-range-label');
+    if(lbl) lbl.textContent = '0% – 100%';
+  }
+
+  // Update button active states — type group
+  ['all','basic','garage','conv','mixed'].forEach(id => {
+    document.getElementById('pf-'+id)?.classList.remove('pf-active');
+  });
+  const typeMap = {'':'all','basic':'basic','garage':'garage','conveyor':'conv','mixed':'mixed'};
+  document.getElementById('pf-'+(typeMap[poolFilterType]||'all'))?.classList.add('pf-active');
+
+  // WR category group
+  ['killer','vhard','hard-wr','normal-wr','easy-wr','izzy-wr','wr-all'].forEach(id => {
+    document.getElementById('pf-'+id)?.classList.remove('pf-active');
+  });
+  const wrMap = {'killer':'killer','vhard':'vhard','hard':'hard-wr','normal':'normal-wr','easy':'easy-wr','izzy':'izzy-wr','':'wr-all'};
+  if(dim === 'wr' && wrMap[val] !== undefined) document.getElementById('pf-'+wrMap[val])?.classList.add('pf-active');
+
+  renderPool();
+}
+
+// Users WR span for funnel cards — shown next to Bot WR
+function uwrSpan(r){
+  const u = r.userswr;
+  const col = u==null ? 'var(--text3)' : (u>=.75?'#1D9E75':u>=.5?'#BA7517':'#E24B4A');
+  return `<span class="fc-wr fc-wr-user" style="color:${col}" title="Users WR">${u!=null ? '🧑 '+Math.round(u*100)+'%' : '🧑 —'}</span>`;
+}
+
+function renderPool() {
+  const search = document.getElementById('pool-search')?.value.toLowerCase() || '';
+  const pool = document.getElementById('funnel-pool');
+  if (!pool) return;
+  const inDraft = new Set(draftFunnel);
+
+  // Determine effective WR range: category button takes precedence over slider
+  let wrMin = 0, wrMax = 1;
+  if (poolFilterWr) {
+    const ranges = {killer:[0,.10],vhard:[.10,.30],hard:[.30,.50],normal:[.50,.70],easy:[.70,.90],izzy:[.90,1.01]};
+    [wrMin, wrMax] = ranges[poolFilterWr] || [0,1];
+  } else {
+    wrMin = poolWrMin/100; wrMax = poolWrMax/100;
+  }
+
+  const wrFilterActive = poolFilterWr || poolWrMin>0 || poolWrMax<100;
+  const filtered = LEVELS.filter(r => {
+    if (poolFilterType && !(r.mechanics||[]).includes(poolFilterType)) return false;
+    if (poolFilterSubtype && r.subtype !== poolFilterSubtype) return false;
+    if (poolFilterComp && r.composition !== poolFilterComp) return false;
+    if (r.botwr == null) { if (wrFilterActive) return false; }   // untested: only when no WR filter
+    else if (r.botwr < wrMin || r.botwr > wrMax) return false;
+    if (search && !r.name.toLowerCase().includes(search) && !String(r.n).includes(search)) return false;
+    return true;
+  });
+
+  const finalPos = n => { const i = liveFunnel.indexOf(n); return i<0 ? null : i+1; };
+  pool.innerHTML = filtered.map(r => {
+    const inD = inDraft.has(r.n);
+    const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
+    const edTag = diffCycleBadge(r.n, r.diff);
+    const atTag = autoWrBadge(r.botwr);
+    const fp = finalPos(r.n);
+    return `<div class="funnel-card${inD?' in-draft':''}" draggable="true" data-n="${r.n}"
+      ondragstart="poolDragStart(event,${r.n})" ondblclick="addToDraft(${r.n})"
+      title="${inD?'В черновике':'Двойной клик или перетащи'}">
+      <span class="fc-pos" title="Позиция в финальной воронке">${fp??'—'}</span>
+      <span class="fc-hash" title="Номер уровня">#${r.n}</span>
+      <span class="fc-name">${r.name}</span>
+      <span style="display:flex;gap:3px;align-items:center;flex-shrink:0">
+        ${mechBadges(r)}
+        ${edTag}
+        ${atTag}
+      </span>
+      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
+      <span class="fc-add" onclick="event.stopPropagation();addToDraft(${r.n})" title="Добавить в конец воронки">+</span>
+    </div>`;
+  }).join('') || '<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">Ничего не найдено</div>';
+}
+
+function renderLiveFunnel() {
+  const el = document.getElementById('funnel-live');
+  if (!el) return;
+  el.innerHTML = liveFunnel.map((n,i) => {
+    const r = LEVELS.find(x=>x.n===n); if(!r) return '';
+    const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
+    const edTag = diffCycleBadge(r.n, r.diff);
+    const atTag = autoWrBadge(r.botwr);
+    return `<div class="funnel-card" style="cursor:default">
+      <span class="draft-pos">${i+1}</span>
+      <span style="font-size:9px;color:var(--text3);min-width:18px">#${r.n}</span>
+      <span class="fc-name">${r.name}</span>
+      <span style="display:flex;gap:2px;flex-shrink:0">${edTag}${atTag}</span>
+      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
+    </div>`;
+  }).join('');
+}
+
+function renderDraftFunnel() {
+  const el = document.getElementById('funnel-draft');
+  if (!el) return;
+  if (!draftFunnel.length) {
+    el.innerHTML = '<div class="drop-hint">Перетащи уровни сюда из банка<br>или нажми + на плашке уровня</div>';
+    document.getElementById('draft-count').textContent = '';
+    updateFunnelChart(); updateFunnelBreakdown(); return;
+  }
+  el.innerHTML = draftFunnel.map((n,i) => {
+    const r = LEVELS.find(x=>x.n===n); if(!r) return '';
+    const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
+    // highlight if position changed vs live
+    const livPos = liveFunnel.indexOf(n);
+    const changed = livPos !== i;
+    const edTag = diffCycleBadge(r.n, r.diff);
+    const atTag = autoWrBadge(r.botwr);
+    return `<div class="draft-row">
+      <div class="funnel-card" draggable="true" data-idx="${i}" data-n="${n}"
+        style="${changed?'border-left:2px solid var(--accent)':''}"
+        ondragstart="draftDragStart(event,${i})"
+        ondragover="draftDragOver(event,${i})"
+        ondrop="draftDrop(event,${i})"
+        ondragleave="this.style.borderTop=''"
+        ondragend="draftDragEnd()">
+        <span class="fc-handle">⠿</span>
+        <span class="draft-pos" title="Позиция в черновике">${i+1}</span>
+        <span class="fc-hash" title="Номер уровня">#${r.n}</span>
+        <span class="fc-name">${r.name}</span>
+        <span style="display:flex;gap:2px;flex-shrink:0">${edTag}${atTag}</span>
+        <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}
+        <span class="fc-del" onclick="removeFromDraft(${i})" title="Убрать">✕</span>
+      </div>
+      <div class="draft-annot" title="Заметки для этой позиции — не перетаскиваются вместе с уровнем">
+        <span class="fc-lmcell" ondragover="landmarkCellDragOver(event)" ondragleave="this.classList.remove('lm-over')" ondrop="landmarkDrop(event,${i+1})">
+          ${(funnelLandmarks[i+1]||[]).map((lm,li)=>{
+            const st = lm.c ? `background:${lm.c}1f;color:${lm.c};border:0.5px solid ${lm.c}55` : 'background:var(--accent-light);color:var(--accent)';
+            const icon = (lm.t==='Сложный'||lm.t==='Супер Сложный') ? '' : '📍 ';
+            return `<span class="fc-lm has" draggable="true" style="${st}"
+               ondragstart="landmarkDragStart(event,${i+1},${li})" ondragend="landmarkDragEnd()"
+               onclick="editLandmark(${i+1},${li},event)" title="Клик — изменить/цвет · тащи — перенести">${icon}${lm.t}</span>`;
+          }).join('')}
+          <span class="fc-lm add lm-add-hard" onclick="event.stopPropagation();addLandmarkTag(${i+1},'Сложный')" title="Добавить «Сложный»">С</span>
+          <span class="fc-lm add lm-add-shard" onclick="event.stopPropagation();addLandmarkTag(${i+1},'Супер Сложный')" title="Добавить «Супер Сложный»">СС</span>
+          <span class="fc-lm add" onclick="addLandmark(${i+1},event)" title="Свой ориентир (текст + цвет)">+</span>
+        </span>
+        <span class="fc-target" title="Таргетный WR для этой позиции (из столбца Target, можно переопределить)">
+          <input type="number" min="0" max="100" class="fc-target-inp" draggable="false"
+            value="${targetForPos(i+1)??''}" placeholder="—" style="color:${tgtColor(targetForPos(i+1))}"
+            onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="setTarget(${i+1}, this)"><span class="fc-target-pct">%</span>
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('draft-count').textContent = draftFunnel.length+' уровней';
+  updateFunnelChart(); updateFunnelMetrics(); updateFunnelBreakdown();
+}
+
+function updateFunnelMetrics() {
+  const el = document.getElementById('funnel-metrics'); if(!el) return;
+  const inD = draftFunnel.map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);
+  if(!inD.length){el.innerHTML='';return;}
+  const avgBot = avgBotPct(inD);
+  const withUWR = inD.filter(r=>r.userswr);
+  const avgUser = withUWR.length ? (withUWR.reduce((s,r)=>s+r.userswr,0)/withUWR.length*100).toFixed(1) : '—';
+  const normals = inD.filter(r=>r.diff==='normal');
+  const hards   = inD.filter(r=>r.diff==='hard');
+  const shards  = inD.filter(r=>r.diff==='superhard');
+  const avgNorm = avgBotPct(normals);
+  const avgHard = avgBotPct(hards);
+  const avgSH   = avgBotPct(shards);
+  el.innerHTML = `
+    <div class="metric"><div class="metric-label">Уровней</div><div class="metric-value">${inD.length}</div><div class="metric-sub">всего ${LEVELS.length}</div></div>
+    <div class="metric"><div class="metric-label">Avg Bot WR</div><div class="metric-value">${avgBot}%</div></div>
+    <div class="metric"><div class="metric-label">Avg Users WR</div><div class="metric-value">${avgUser}%</div></div>
+    <div class="metric"><div class="metric-label">Нормальные</div><div class="metric-value">${normals.length}</div><div class="metric-sub">avg bot WR ${avgNorm}%</div></div>
+    <div class="metric"><div class="metric-label">Сложные</div><div class="metric-value">${hards.length}</div><div class="metric-sub" style="color:${parseFloat(avgHard)>parseFloat(avgNorm)?'#A32D2D':''}">avg bot WR ${avgHard}%${parseFloat(avgHard)>parseFloat(avgNorm)?' ⚠':''}</div></div>
+    <div class="metric"><div class="metric-label">Супер сложные</div><div class="metric-value">${shards.length}</div><div class="metric-sub" style="color:${parseFloat(avgSH)>parseFloat(avgHard)||parseFloat(avgSH)>parseFloat(avgNorm)?'#A32D2D':''}">avg bot WR ${avgSH}%${parseFloat(avgSH)>parseFloat(avgHard)||parseFloat(avgSH)>parseFloat(avgNorm)?' ⚠':''}</div></div>
+  `;
+}
+
+// ── WR breakdown by type / difficulty / mechanic-within-difficulty ──
+let breakdownSrc = 'draft';
+const BD_DIFFS = [
+  {key:'easywin',  label:'Лёгкие',        color:'#1D9E75'},
+  {key:'normal',   label:'Нормальные',    color:'#3266ad'},
+  {key:'hard',     label:'Сложные',       color:'#BA7517'},
+  {key:'superhard',label:'Супер сложные', color:'#E24B4A'}
+];
+const bdAvg = arr => { const v=arr.filter(r=>r.botwr!=null); return v.length ? +(v.reduce((s,r)=>s+r.botwr,0)/v.length*100).toFixed(1) : null; };
+const BD_PALETTE = ['#3266ad','#BA7517','#E24B4A','#7F77DD','#1D9E75','#993556','#EF9F27','#0E7C7B'];
+const BD_MECH_COLOR = {basic:'#3266ad',garage:'#BA7517',conveyor:'#E24B4A',mixed:'#7F77DD',tutorial:'#1D9E75'};
+const hasMech = (r,k)=>(r.mechanics||[]).includes(k);
+
+function setBreakdownSrc(s){
+  breakdownSrc = s;
+  document.getElementById('bd-src-draft')?.classList.toggle('pf-active', s==='draft');
+  document.getElementById('bd-src-all')?.classList.toggle('pf-active', s==='all');
+  updateFunnelBreakdown();
+}
+
+function bdBarOpts(rows, groups, matchFn){
+  return {responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>{
+        const cnt = rows.filter(r=>matchFn(r, groups[c.dataIndex].key)).length;
+        return `${c.parsed.y==null?'нет данных':c.parsed.y+'%'} · ${cnt} ур.`;
+      }}}},
+    scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(128,128,128,.1)'}},
+      x:{ticks:{font:{size:11}},grid:{display:false}}}};
+}
+
+function updateFunnelBreakdown(){
+  let rows;
+  if(breakdownSrc==='draft'){
+    rows = draftFunnel.map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);
+    if(!rows.length) rows = LEVELS; // fallback so charts aren't empty
+  } else rows = LEVELS;
+
+  const diffPresent = BD_DIFFS.filter(d=>rows.some(r=>r.diff===d.key));
+  // mechanics present, with a stable colour each (a level counts under each of its mechanics)
+  const typePresent = mechanicsPresent(rows).map((m,i)=>({key:m, label:(MECH_META[m]?MECH_META[m].label:m), color: BD_MECH_COLOR[m]||BD_PALETTE[i%BD_PALETTE.length]}));
+
+  // by difficulty
+  const dEl = document.getElementById('bdDiffChart');
+  if(dEl){
+    if(charts.bdDiff) charts.bdDiff.destroy();
+    charts.bdDiff = new Chart(dEl.getContext('2d'),{type:'bar',
+      data:{labels:diffPresent.map(d=>d.label),datasets:[{
+        data:diffPresent.map(d=>bdAvg(rows.filter(r=>r.diff===d.key))),
+        backgroundColor:diffPresent.map(d=>d.color),borderRadius:4}]},
+      options:bdBarOpts(rows,diffPresent,(r,k)=>r.diff===k)});
+  }
+
+  // by mechanic
+  const tEl = document.getElementById('bdTypeChart');
+  if(tEl){
+    if(charts.bdType) charts.bdType.destroy();
+    charts.bdType = new Chart(tEl.getContext('2d'),{type:'bar',
+      data:{labels:typePresent.map(t=>t.label),datasets:[{
+        data:typePresent.map(t=>bdAvg(rows.filter(r=>hasMech(r,t.key)))),
+        backgroundColor:typePresent.map(t=>t.color),borderRadius:4}]},
+      options:bdBarOpts(rows,typePresent,hasMech)});
+  }
+
+  // mechanics within difficulties (grouped)
+  const mEl = document.getElementById('bdMechChart');
+  if(mEl){
+    if(charts.bdMech) charts.bdMech.destroy();
+    charts.bdMech = new Chart(mEl.getContext('2d'),{type:'bar',
+      data:{labels:diffPresent.map(d=>d.label),
+        datasets:typePresent.map(t=>({label:t.label,
+          data:diffPresent.map(d=>bdAvg(rows.filter(r=>r.diff===d.key && hasMech(r,t.key)))),
+          backgroundColor:t.color,borderRadius:3}))},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:12,padding:10}},
+          tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'нет данных':c.parsed.y+'%'}`}}},
+        scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(128,128,128,.1)'}},
+          x:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  }
+}
+
+function updateFunnelChart() {
+  const ctx = document.getElementById('funnelWrChart')?.getContext('2d'); if(!ctx) return;
+  const N = 60;
+  const draftData = draftFunnel.slice(0,N).map(n=>{const r=LEVELS.find(x=>x.n===n);return (r&&r.botwr!=null)?+(r.botwr*100).toFixed(1):null;});
+  const labels = Array.from({length:Math.max(draftData.length,1)},(_,i)=>i+1);
+  if(charts.funnelWr) charts.funnelWr.destroy();
+  charts.funnelWr = new Chart(ctx,{type:'line',
+    data:{labels, datasets:[
+      {label:'Черновик',data:draftData,borderColor:'#7F77DD',fill:true,backgroundColor:'rgba(127,119,221,.1)',tension:.3,pointRadius:2,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(128,128,128,.1)'}},
+        x:{ticks:{font:{size:10}},grid:{display:false}}}}
+  });
+}
+
+
+function poolDragStart(e,n){e.dataTransfer.setData('source','pool');e.dataTransfer.setData('n',n);}
+function addToDraft(n){draftFunnel.push(n);renderPool();renderDraftFunnel();}
+function dropOnDraft(e){
+  e.preventDefault();document.getElementById('funnel-draft').classList.remove('drag-over');
+  if(e.dataTransfer.getData('source')==='pool'){const n=parseInt(e.dataTransfer.getData('n'));if(!isNaN(n)){draftFunnel.push(n);renderPool();renderDraftFunnel();}}
+}
+function draftDragStart(e,idx){
+  dragSrcIdx=idx;e.dataTransfer.setData('source','draft');e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>{const c=document.querySelectorAll('#funnel-draft .funnel-card');if(c[idx])c[idx].classList.add('dragging');},0);
+}
+function draftDragOver(e,idx){
+  e.preventDefault();
+  const cards=document.querySelectorAll('#funnel-draft .funnel-card');
+  cards.forEach(c=>c.style.borderTop='');
+  if(dragSrcIdx!==null&&dragSrcIdx!==idx&&cards[idx])cards[idx].style.borderTop='2px solid var(--accent)';
+}
+function draftDrop(e,idx){
+  e.preventDefault();e.stopPropagation();
+  if(e.dataTransfer.getData('source')==='draft'&&dragSrcIdx!==null&&dragSrcIdx!==idx){
+    const item=draftFunnel.splice(dragSrcIdx,1)[0];draftFunnel.splice(idx,0,item);renderDraftFunnel();
+  }
+  dragSrcIdx=null;
+}
+function draftDragEnd(){
+  dragSrcIdx=null;
+  document.querySelectorAll('#funnel-draft .funnel-card').forEach(c=>{c.classList.remove('dragging');c.style.borderTop='';});
+}
+function removeFromDraft(idx){draftFunnel.splice(idx,1);renderPool();renderDraftFunnel();}
+function funnelReset(){draftFunnel=[...liveFunnel];localStorage.removeItem('wq-draft-funnel');renderPool();renderDraftFunnel();}
+function funnelClear(){draftFunnel=[];renderPool();renderDraftFunnel();}
+function funnelSaveDraft(){
+  localStorage.setItem('wq-draft-funnel',JSON.stringify(draftFunnel));
+  const btn=event.target,orig=btn.textContent;btn.textContent='✓ Сохранено';setTimeout(()=>btn.textContent=orig,1500);
+}
+function funnelCopyList(){
+  const text=draftFunnel.map((n,i)=>{const r=LEVELS.find(x=>x.n===n);return `${i+1}. ${r?r.name:'?'} (#${n}) — Bot WR: ${r?Math.round(r.botwr*100):0}%`;}).join('\n');
+  navigator.clipboard.writeText(text).then(()=>{const btn=event.target,orig=btn.textContent;btn.textContent='✓ Скопировано!';setTimeout(()=>btn.textContent=orig,1500);});
+}
+
+// ─────────────────────────────────────────────
+//  SAVED FUNNELS — named snapshots shown as their own tabs
+// ─────────────────────────────────────────────
+let savedFunnels = JSON.parse(localStorage.getItem('wq-saved-funnels') || '[]'); // [{id,name,order:[...]}]
+function persistSavedFunnels(){ localStorage.setItem('wq-saved-funnels', JSON.stringify(savedFunnels)); }
+
+function saveFunnelVersion(){
+  if(!draftFunnel.length){ alert('Черновик пуст — нечего сохранять.'); return; }
+  const name = (prompt('Название воронки:', 'Воронка '+(savedFunnels.length+1)) || '').trim();
+  if(!name) return;
+  // Overwrite if a funnel with the same name already exists (case-insensitive)
+  const existing = savedFunnels.find(f => f.name.toLowerCase() === name.toLowerCase());
+  const id = existing ? existing.id : 'sf'+Date.now();
+  if(existing){ existing.name = name; existing.order = [...draftFunnel]; }
+  else savedFunnels.push({id, name, order:[...draftFunnel]});
+  persistSavedFunnels();
+  rebuildSavedFunnelTabs();
+  const btn = document.querySelector(`.tab[data-sf="${id}"]`);
+  if(btn) showTab(id, btn);
+}
+
+function rebuildSavedFunnelTabs(){
+  document.querySelectorAll('.tab-saved').forEach(t=>t.remove());
+  document.querySelectorAll('.panel-saved').forEach(p=>p.remove());
+  const tabsBar = document.querySelector('.tabs');
+  const contentWrap = document.getElementById('tab-funnel').parentNode;
+  if(savedFunnels.length){
+    const sep = document.createElement('span');
+    sep.className = 'tab-saved tab-saved-sep';
+    sep.textContent = 'мои воронки';
+    tabsBar.appendChild(sep);
+  }
+  savedFunnels.forEach(f=>{
+    const btn = document.createElement('button');
+    btn.className = 'tab tab-saved';
+    btn.dataset.sf = f.id;
+    btn.textContent = '📁 ' + f.name;
+    btn.onclick = function(){ showTab(f.id, this); };
+    tabsBar.appendChild(btn);
+    const panel = document.createElement('div');
+    panel.className = 'panel panel-saved';
+    panel.id = 'tab-' + f.id;
+    contentWrap.appendChild(panel);
+  });
+}
+
+function renderSavedFunnel(id){
+  const f = savedFunnels.find(x=>x.id===id); if(!f) return;
+  const panel = document.getElementById('tab-'+id); if(!panel) return;
+  const rows = f.order.map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);  // levels in funnel order
+  const ins = buildInsights(rows);                                       // insights for THIS funnel's order
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <div><span style="font-size:13px;font-weight:500">📁 ${f.name}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">Сохранённая воронка · ${f.order.length} уровней · порядок зафиксирован</span></div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="config-btn" onclick="loadSavedToDraft('${id}')" style="font-size:12px">✎ В черновик</button>
+        <button class="config-btn" onclick="renameSavedFunnel('${id}')" style="font-size:12px">✏️ Переименовать</button>
+        <button class="config-btn" onclick="copySavedList('${id}')" style="font-size:12px">📋 Скопировать</button>
+        <button class="config-btn" onclick="deleteSavedFunnel('${id}')" style="font-size:12px;color:var(--red)">🗑 Удалить</button>
+      </div>
+    </div>
+    <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length)}</div>
+    ${levelsTableHTML(rows, false)}
+    <div style="margin-top:28px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:500">📊 Средний WR по механикам внутри сложности</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">Для каждой сложности — общий средний Bot WR и в разрезе механик уровней</span>
+    </div>
+    <div style="max-width:760px">${mechBreakdownHTML(rows)}</div>
+    <div style="margin-top:28px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:500">💡 Инсайты этой воронки</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">Выводы по порядку именно этой воронки</span>
+    </div>
+    <div class="metrics" style="margin-bottom:20px">${ins.metricsHTML}</div>
+    <div>${ins.bodyHTML}</div>`;
+}
+
+function loadSavedToDraft(id){
+  const f = savedFunnels.find(x=>x.id===id); if(!f) return;
+  if(!confirm('Загрузить эту воронку в черновик? Текущий черновик будет заменён.')) return;
+  const fbtn = document.querySelector(`.tab[onclick*="'funnel'"]`);
+  showTab('funnel', fbtn);
+  draftFunnel = [...f.order];
+  renderPool(); renderDraftFunnel();
+}
+
+function renameSavedFunnel(id){
+  const f = savedFunnels.find(x=>x.id===id); if(!f) return;
+  const name = (prompt('Новое название:', f.name) || '').trim(); if(!name) return;
+  f.name = name; persistSavedFunnels(); rebuildSavedFunnelTabs(); renderSavedFunnel(id);
+  const btn = document.querySelector(`.tab[data-sf="${id}"]`);
+  if(btn){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); }
+}
+
+function deleteSavedFunnel(id){
+  if(!confirm('Удалить эту воронку?')) return;
+  const wasActive = document.getElementById('tab-'+id)?.classList.contains('active');
+  savedFunnels = savedFunnels.filter(f=>f.id!==id);
+  persistSavedFunnels();
+  rebuildSavedFunnelTabs();
+  if(wasActive){ const fbtn = document.querySelector(`.tab[onclick*="'funnel'"]`); showTab('funnel', fbtn); }
+}
+
+function copySavedList(id){
+  const f = savedFunnels.find(x=>x.id===id); if(!f) return;
+  const text = f.order.map((n,i)=>{const r=LEVELS.find(x=>x.n===n);return `${i+1}. ${r?r.name:'?'} (#${n}) — Bot WR: ${r?Math.round(r.botwr*100):0}%`;}).join('\n');
+  navigator.clipboard.writeText(text).then(()=>{const btn=event.target,orig=btn.textContent;btn.textContent='✓ Скопировано!';setTimeout(()=>btn.textContent=orig,1500);});
+}
+
+// Restore saved funnel tabs — runs last, after all state declarations are initialized
+rebuildSavedFunnelTabs();
+</script>
+</body>
+</html>
