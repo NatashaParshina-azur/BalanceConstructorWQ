@@ -264,6 +264,18 @@
   .fc-del:hover { color:var(--red); }
   .fc-add { cursor:pointer; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:5px; border:0.5px solid var(--border2); color:var(--text3); font-size:13px; line-height:1; transition:all .12s; }
   .fc-add:hover { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .fc-shot { cursor:pointer; flex-shrink:0; font-size:13px; opacity:.75; transition:opacity .12s; }
+  .fc-shot:hover { opacity:1; }
+  /* hover preview */
+  #shot-pop { display:none; position:fixed; z-index:1100; pointer-events:none; background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--r-md); padding:4px; box-shadow:0 6px 24px rgba(0,0,0,.22); }
+  #shot-pop img { display:block; max-width:320px; max-height:320px; border-radius:6px; }
+  /* click modal */
+  #shot-modal { display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.6); align-items:center; justify-content:center; }
+  .shot-modal-inner { position:relative; background:var(--surface); border-radius:var(--r-lg); padding:14px; max-width:92vw; max-height:92vh; display:flex; flex-direction:column; gap:8px; }
+  .shot-modal-inner img { max-width:88vw; max-height:80vh; border-radius:8px; object-fit:contain; }
+  .shot-modal-cap { font-size:13px; font-weight:600; color:var(--text); }
+  .shot-modal-x { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; border:none; background:var(--surface2); color:var(--text2); cursor:pointer; font-size:14px; }
+  .shot-modal-x:hover { background:var(--red-light); color:var(--red); }
   .draft-pos { font-size:10px; color:var(--text3); min-width:16px; font-weight:600; }
   /* draft row = draggable level card + a separate (non-draggable) annotations field */
   .draft-row { display:flex; align-items:stretch; gap:8px; }
@@ -570,6 +582,16 @@
     <button id="lm-pop-del" class="config-btn" style="font-size:11px;color:var(--red);margin-right:auto" onclick="deleteLmEditor()">🗑 Удалить</button>
     <button class="config-btn" style="font-size:11px" onclick="closeLmEditor()">Отмена</button>
     <button class="sync-btn" style="font-size:11px" onclick="saveLmEditor()">Сохранить</button>
+  </div>
+</div>
+
+<!-- LEVEL SCREENSHOT: hover preview + click modal -->
+<div id="shot-pop"><img id="shot-pop-img" alt=""></div>
+<div id="shot-modal" onclick="closeShot()">
+  <div class="shot-modal-inner" onclick="event.stopPropagation()">
+    <div class="shot-modal-cap" id="shot-modal-cap"></div>
+    <img id="shot-modal-img" alt="">
+    <button class="shot-modal-x" onclick="closeShot()" title="Закрыть">✕</button>
   </div>
 </div>
 
@@ -1542,6 +1564,52 @@ function triesSpan(r){
   return `<span class="fc-wr fc-tries" title="Среднее попыток на уровень (avg_level_try)">🔁 ${fmtTries(r.tries)}</span>`;
 }
 
+// ── Level screenshots (from the private Unity repo via Netlify functions) ──
+let levelShots = {};   // levelName(lower) → filename
+async function loadShots(){
+  try {
+    const resp = await fetch('/.netlify/functions/shots-list');
+    if(!resp.ok) return;
+    const map = await resp.json();
+    const idx = {};
+    for(const base in map) idx[base.toLowerCase().trim()] = map[base];
+    levelShots = idx;
+    if(typeof rendered !== 'undefined' && rendered.funnel) renderPool();  // show icons once loaded
+  } catch(e){ /* deployed-only; ignore locally */ }
+}
+function shotFile(r){ return levelShots[(r.name||'').toLowerCase().trim()] || null; }
+function shotUrl(file){ return `/.netlify/functions/shot?file=${encodeURIComponent(file)}`; }
+function shotIcon(r){
+  const f = shotFile(r);
+  if(!f) return '';
+  const fe = f.replace(/'/g,'%27'), ne = (r.name||'').replace(/'/g,'%27');
+  return `<span class="fc-shot" onmouseenter="showShot(event,'${fe}')" onmousemove="moveShot(event)" onmouseleave="hideShot()" onclick="event.stopPropagation();openShot('${fe}','${ne}')" title="Превью уровня — наведи или кликни">🖼</span>`;
+}
+function showShot(e, file){
+  const pop = document.getElementById('shot-pop'); const img = document.getElementById('shot-pop-img');
+  if(!pop) return;
+  img.src = shotUrl(file);
+  pop.style.display = 'block';
+  moveShot(e);
+}
+function moveShot(e){
+  const pop = document.getElementById('shot-pop'); if(!pop || pop.style.display==='none') return;
+  const pad = 14, w = pop.offsetWidth||320, h = pop.offsetHeight||240;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if(x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+  if(y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  pop.style.left = x + 'px'; pop.style.top = Math.max(8,y) + 'px';
+}
+function hideShot(){ const pop = document.getElementById('shot-pop'); if(pop) pop.style.display='none'; }
+function openShot(file, name){
+  hideShot();
+  const m = document.getElementById('shot-modal'); if(!m) return;
+  document.getElementById('shot-modal-img').src = shotUrl(file);
+  document.getElementById('shot-modal-cap').textContent = name || '';
+  m.style.display = 'flex';
+}
+function closeShot(){ const m = document.getElementById('shot-modal'); if(m) m.style.display='none'; }
+
 function renderPool() {
   const search = document.getElementById('pool-search')?.value.toLowerCase() || '';
   const pool = document.getElementById('funnel-pool');
@@ -1595,7 +1663,7 @@ function renderPool() {
         ${edTag}
         ${atTag}
       </span>
-      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}
+      <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}${shotIcon(r)}
       <span class="fc-add" onclick="event.stopPropagation();addToDraft(${r.n})" title="Добавить в конец воронки">+</span>
     </div>`;
   }).join('') || '<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">Ничего не найдено</div>';
@@ -1688,7 +1756,7 @@ function renderDraftFunnel() {
         <span class="fc-hash" title="Номер уровня">#${r.n}</span>
         <span class="fc-name">${r.name}</span>
         <span style="display:flex;gap:3px;align-items:center;flex-shrink:0">${mechBadges(r)}${edTag}${atTag}</span>
-        <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}
+        <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}${shotIcon(r)}
         <span class="fc-del" onclick="removeFromDraft(${i})" title="Убрать">✕</span>
       </div>
       ${annotCellHTML(pos)}
@@ -1983,6 +2051,8 @@ function copySavedList(id){
 
 // Restore saved funnel tabs — runs last, after all state declarations are initialized
 rebuildSavedFunnelTabs();
+loadShots();   // fetch available level screenshots (deployed only)
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeShot(); });
 </script>
 </body>
 </html>
