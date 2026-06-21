@@ -3,9 +3,9 @@
 const OWNER = 'azur-games', REPO = 'wool-crush-clone';
 
 export async function onRequest(context) {
-  const env = context.env;
+  const env = context.env || {};
   const token = env.GITHUB_TOKEN;
-  if (!token) return new Response('GITHUB_TOKEN env var is not set', { status: 500 });
+  if (!token) return new Response('GITHUB_TOKEN env var is not set. Vars the function sees: ' + JSON.stringify(Object.keys(env)), { status: 500 });
   const branch = env.SCREENSHOTS_BRANCH || 'main';
   const dir = env.SCREENSHOTS_DIR || 'LevelScreenshots';
   try {
