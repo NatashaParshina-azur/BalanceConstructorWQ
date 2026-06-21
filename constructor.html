@@ -1619,7 +1619,7 @@ function renderDraftFunnel() {
         <span class="draft-pos" title="Позиция в черновике">${pos}</span>
         <span class="fc-hash" title="Номер уровня">#${r.n}</span>
         <span class="fc-name">${r.name}</span>
-        <span style="display:flex;gap:2px;flex-shrink:0">${edTag}${atTag}</span>
+        <span style="display:flex;gap:3px;align-items:center;flex-shrink:0">${mechBadges(r)}${edTag}${atTag}</span>
         <span class="fc-wr" style="color:${wrCol}" title="Bot WR">🤖 ${r.botwr==null?'—':Math.round(r.botwr*100)+'%'}</span>${uwrSpan(r)}${triesSpan(r)}
         <span class="fc-del" onclick="removeFromDraft(${i})" title="Убрать">✕</span>
       </div>
