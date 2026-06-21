@@ -1,0 +1,5 @@
+# Always revalidate the HTML so a new deploy shows up on a normal reload (no stale tab).
+/
+  Cache-Control: no-cache, must-revalidate
+/constructor.html
+  Cache-Control: no-cache, must-revalidate
