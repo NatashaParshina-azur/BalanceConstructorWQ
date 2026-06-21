@@ -295,11 +295,14 @@
   .fc-target-pct { font-size:9px; color:var(--text3); }
   .pf-active, .lf-active { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
   /* mechanic tri-state chips: off / include (green) / exclude (red) */
-  .mech-chip { font-size:11px; padding:3px 9px; border-radius:12px; border:0.5px solid var(--border2); background:var(--surface); color:var(--text2); cursor:pointer; transition:all .12s; }
+  .mech-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 9px 3px 5px; border-radius:12px; border:0.5px solid var(--border2); background:var(--surface); color:var(--text2); cursor:pointer; transition:all .12s; user-select:none; }
   .mech-chip:hover { border-color:var(--accent); color:var(--text); }
   .mech-chip.mech-inc { background:var(--green-light); color:var(--green); border-color:var(--green); font-weight:600; }
   .mech-chip.mech-exc { background:var(--red-light); color:var(--red); border-color:var(--red); font-weight:600; }
-  .mech-chip.active-all { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .mech-chip.active-all { padding:3px 9px; background:var(--accent); color:#fff; border-color:var(--accent); }
+  /* the +/− is a self-contained button inside the chip */
+  .mech-pm { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border:1px solid currentColor; border-radius:5px; font-size:12px; font-weight:700; line-height:1; flex-shrink:0; opacity:.8; }
+  .mech-pm:hover { opacity:1; background:rgba(127,127,127,.18); }
   .drop-hint { text-align:center; padding:40px 12px; color:var(--text3); font-size:12px; border:1.5px dashed var(--border2); border-radius:var(--r-md); }
   .funnel-sep { display:flex; align-items:center; gap:8px; padding:3px 4px; font-size:10px; color:var(--text3); user-select:none; }
   .funnel-sep input { font-size:10px; padding:2px 6px; border:0.5px solid var(--border2); border-radius:5px; background:var(--surface2); color:var(--text); width:100%; }
@@ -431,9 +434,17 @@
           <input type="text" id="pool-search" placeholder="Поиск..." oninput="renderPool()"
             style="width:100%;padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:12px">
         </div>
-        <div class="filter-row" style="margin-bottom:6px;gap:4px;flex-wrap:wrap">
-          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Тип механики (тап: <span style="color:var(--green)">+ нужен</span> → <span style="color:var(--red)">− исключить</span> → выкл):</span>
-          <span id="pf-mech" style="display:flex;gap:4px;flex-wrap:wrap;width:100%"></span>
+        <div class="filter-row" style="margin-bottom:6px;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Тип механики (тап по тегу — выбрать/снять; <b style="color:var(--red)">«+»</b> — исключить):</span>
+          <span id="pf-mech" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center"></span>
+          <span id="pf-garages" style="display:none;align-items:center;gap:5px;margin-left:8px;font-size:11px;color:var(--text3)">
+            <span>🏠 гаражей:</span>
+            <input type="number" id="pool-gar-min" placeholder="от" oninput="onPoolGar()" min="0"
+              style="width:54px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
+            <span>–</span>
+            <input type="number" id="pool-gar-max" placeholder="до" oninput="onPoolGar()" min="0"
+              style="width:54px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
+          </span>
         </div>
         <div class="filter-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;align-items:center">
           <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Подтип / состав:</span>
@@ -448,14 +459,6 @@
             <option value="simple">simple</option>
             <option value="complex">complex</option>
           </select>
-        </div>
-        <div class="filter-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;align-items:center">
-          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Кол-во гаражей (Garages):</span>
-          <input type="number" id="pool-gar-min" placeholder="от" oninput="onPoolGar()" min="0"
-            style="width:64px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
-          <span style="font-size:11px;color:var(--text3)">–</span>
-          <input type="number" id="pool-gar-max" placeholder="до" oninput="onPoolGar()" min="0"
-            style="width:64px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
         </div>
         <div class="filter-row" style="margin-bottom:8px;gap:4px;flex-wrap:wrap">
           <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Авто-сложность (Bot WR):</span>
@@ -1430,28 +1433,42 @@ function funnelInit() {
 let poolMech = {};              // mechanic tri-state filter: { key: 'include' | 'exclude' }
 let poolFilterWr = new Set();   // multi-select set of WR category keys
 
-// Build the mechanic-type tri-state chips (include ✓ green / exclude ✕ red / off).
+// Build the mechanic-type chips. Tap the chip body → include (green) / toggle off.
+// Tap the outlined "+" button → exclude (red, becomes "−"); tap "−" → off.
 function renderMechFilter(){
   const cont = document.getElementById('pf-mech'); if(!cont) return;
   const mechs = mechanicsPresent(LEVELS).filter(m => m !== 'mixed');   // drop "multiple"
-  let html = `<button class="mech-chip${Object.keys(poolMech).length===0?' active-all':''}" onclick="clearPoolMech()">Все</button>`;
+  let html = `<span class="mech-chip${Object.keys(poolMech).length===0?' active-all':''}" onclick="clearPoolMech()">Все</span>`;
   html += mechs.map(m=>{
     const st = poolMech[m];
     const cls = st==='include' ? 'mech-inc' : st==='exclude' ? 'mech-exc' : '';
-    const sym = st==='exclude' ? '− ' : '+ ';
+    const sym = st==='exclude' ? '−' : '+';
     const label = MECH_META[m] ? MECH_META[m].label : m;
-    return `<button class="mech-chip ${cls}" onclick="togglePoolMech('${m}')">${sym}${label}</button>`;
+    return `<span class="mech-chip ${cls}" onclick="clickPoolMech('${m}')" title="Тап — выбрать/снять">`
+         + `<span class="mech-pm" onclick="event.stopPropagation();clickPoolMechPM('${m}')" title="${st==='exclude'?'Убрать исключение':'Исключить'}">${sym}</span>`
+         + `<span>${label}</span></span>`;
   }).join('');
   cont.innerHTML = html;
+  updateGaragesVisibility();
 }
-function togglePoolMech(m){
-  const s = poolMech[m];
-  if(!s) poolMech[m]='include';        // off → include
-  else if(s==='include') poolMech[m]='exclude';  // include → exclude
-  else delete poolMech[m];              // exclude → off
+function clickPoolMech(m){            // tap chip body → include ⟷ off
+  if(poolMech[m]==='include') delete poolMech[m]; else poolMech[m]='include';
+  renderMechFilter(); renderPool();
+}
+function clickPoolMechPM(m){          // tap the +/− button → exclude ⟷ off
+  if(poolMech[m]==='exclude') delete poolMech[m]; else poolMech[m]='exclude';
   renderMechFilter(); renderPool();
 }
 function clearPoolMech(){ poolMech = {}; renderMechFilter(); renderPool(); }
+// Garages-count filter shows only when "garage" is included
+function updateGaragesVisibility(){
+  const show = poolMech.garage === 'include';
+  const el = document.getElementById('pf-garages');
+  if(el) el.style.display = show ? 'inline-flex' : 'none';
+  if(!show){ poolGarMin=null; poolGarMax=null;
+    const a=document.getElementById('pool-gar-min'), b=document.getElementById('pool-gar-max');
+    if(a) a.value=''; if(b) b.value=''; }
+}
 let poolFilterSubtype = '';
 let poolFilterComp = '';
 let poolWrMin = 0;    // 0–100
