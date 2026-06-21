@@ -752,7 +752,7 @@ async function fetchSheet(id, sheetName, apiKey) {
 
   // Deployed (Netlify / non-localhost): try the serverless proxy first — avoids browser CORS
   try {
-    const fnUrl = `/.netlify/functions/sheets?id=${encodeURIComponent(id)}&sheet=${encodeURIComponent(sheetName)}`;
+    const fnUrl = `/api/sheets?id=${encodeURIComponent(id)}&sheet=${encodeURIComponent(sheetName)}`;
     const resp = await fetch(fnUrl);
     if (resp.ok) {
       const text = await resp.text();
@@ -1568,7 +1568,7 @@ function triesSpan(r){
 let levelShots = {};   // levelName(lower) → filename
 async function loadShots(){
   try {
-    const resp = await fetch('/.netlify/functions/shots-list');
+    const resp = await fetch('/api/shots-list');
     if(!resp.ok) return;
     const map = await resp.json();
     const idx = {};
@@ -1578,7 +1578,7 @@ async function loadShots(){
   } catch(e){ /* deployed-only; ignore locally */ }
 }
 function shotFile(r){ return levelShots[(r.name||'').toLowerCase().trim()] || null; }
-function shotUrl(file){ return `/.netlify/functions/shot?file=${encodeURIComponent(file)}`; }
+function shotUrl(file){ return `/api/shot?file=${encodeURIComponent(file)}`; }
 function shotIcon(r){
   const f = shotFile(r);
   if(!f) return '';
