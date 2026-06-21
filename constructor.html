@@ -336,6 +336,7 @@
     <span class="sync-status" id="sync-status"></span>
     <input type="text" id="quick-sheet-name" placeholder="Имя листа" value="Levels 6.0"
       style="font-size:12px;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);width:130px">
+    <button class="config-btn" id="user-name" onclick="setUserName()" title="Твоё имя — подпись к воронкам">👤 имя</button>
     <button class="config-btn" onclick="document.getElementById('config-overlay').classList.add('open')">⚙</button>
     <button class="sync-btn" id="sync-btn" onclick="syncSheets()">↻ Обновить</button>
   </div>
@@ -429,8 +430,11 @@
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="config-btn" onclick="funnelReset()" style="font-size:12px">↺ Сбросить</button>
         <button class="config-btn" onclick="funnelClear()" style="font-size:12px">🗑 Очистить</button>
+        <button class="config-btn" onclick="clearTargets()" style="font-size:12px">🎯 Очистить таргеты</button>
+        <button class="config-btn" onclick="clearLandmarks()" style="font-size:12px">📍 Очистить ориентиры</button>
         <button class="config-btn" onclick="funnelCopyList()" style="font-size:12px">📋 Скопировать список</button>
         <button class="config-btn" onclick="funnelSaveDraft()" style="font-size:12px">💾 Сохранить черновик</button>
+        <button class="config-btn" id="btn-overwrite" onclick="overwriteCurrentFunnel()" style="font-size:12px;display:none"></button>
         <button class="sync-btn" onclick="saveFunnelVersion()" style="font-size:12px">📁 Сохранить как воронку</button>
       </div>
     </div>
@@ -1958,22 +1962,86 @@ function funnelCopyList(){
 // ─────────────────────────────────────────────
 //  SAVED FUNNELS — named snapshots shown as their own tabs
 // ─────────────────────────────────────────────
-let savedFunnels = JSON.parse(localStorage.getItem('wq-saved-funnels') || '[]'); // [{id,name,order:[...]}]
-function persistSavedFunnels(){ localStorage.setItem('wq-saved-funnels', JSON.stringify(savedFunnels)); }
+// ── Shared saved funnels (Cloudflare KV via /api/funnels), with localStorage cache/fallback ──
+// A funnel is a self-contained snapshot: { id, name, author, createdAt, updatedAt,
+//   order:[n…], diff:{n:diff}, landmarks:{pos:[{t,c}]}, targets:{pos:%} }
+let savedFunnels = JSON.parse(localStorage.getItem('wq-saved-funnels') || '[]');
+let userName = localStorage.getItem('wq-username') || '';
+let editingFunnelId = null;   // set when a saved funnel was opened via "Редактировать"
 
-function saveFunnelVersion(){
+function setUserName(){
+  const n = (prompt('Твоё имя (подпись к воронкам):', userName) || '').trim();
+  if(n){ userName = n; localStorage.setItem('wq-username', userName); const el=document.getElementById('user-name'); if(el) el.textContent = '👤 '+userName; }
+}
+function ensureUserName(){ if(!userName) setUserName(); return userName; }
+
+async function apiFunnels(method, body){
+  const url = '/api/funnels' + (method==='DELETE' && body && body.id ? '?id='+encodeURIComponent(body.id) : '');
+  const opts = { method };
+  if(body && method!=='DELETE'){ opts.headers = {'Content-Type':'application/json'}; opts.body = JSON.stringify(body); }
+  const resp = await fetch(url, opts);
+  if(!resp.ok) throw new Error('api '+resp.status);
+  return resp.json();
+}
+async function loadSavedFunnels(){
+  try {
+    const list = await fetch('/api/funnels').then(r=>{ if(!r.ok) throw 0; return r.json(); });
+    savedFunnels = Array.isArray(list) ? list : [];
+    localStorage.setItem('wq-saved-funnels', JSON.stringify(savedFunnels));   // cache for offline
+  } catch(e){
+    savedFunnels = JSON.parse(localStorage.getItem('wq-saved-funnels') || '[]');  // fallback (local/dev)
+  }
+  rebuildSavedFunnelTabs();
+  updateOverwriteBtn();
+}
+function funnelSnapshot(id, name){
+  const prev = savedFunnels.find(f=>f.id===id);
+  return {
+    id, name, author: userName || '—',
+    createdAt: prev?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    order: [...draftFunnel],
+    diff: {...funnelDiff},
+    landmarks: JSON.parse(JSON.stringify(funnelLandmarks)),
+    targets: {...funnelTargets},
+  };
+}
+async function saveSnapshot(snap){
+  try { await apiFunnels('POST', snap); }
+  catch(e){ const i=savedFunnels.findIndex(f=>f.id===snap.id); if(i>=0) savedFunnels[i]=snap; else savedFunnels.push(snap); localStorage.setItem('wq-saved-funnels', JSON.stringify(savedFunnels)); }
+  editingFunnelId = snap.id;
+  await loadSavedFunnels();
+  const btn = document.querySelector(`.tab[data-sf="${snap.id}"]`);
+  if(btn) showTab(snap.id, btn);
+}
+
+// "Сохранить как воронку" — name prompt + conscious overwrite if the name already exists
+async function saveFunnelVersion(){
   if(!draftFunnel.length){ alert('Черновик пуст — нечего сохранять.'); return; }
+  ensureUserName();
   const name = (prompt('Название воронки:', 'Воронка '+(savedFunnels.length+1)) || '').trim();
   if(!name) return;
-  // Overwrite if a funnel with the same name already exists (case-insensitive)
-  const existing = savedFunnels.find(f => f.name.toLowerCase() === name.toLowerCase());
-  const id = existing ? existing.id : 'sf'+Date.now();
-  if(existing){ existing.name = name; existing.order = [...draftFunnel]; }
-  else savedFunnels.push({id, name, order:[...draftFunnel]});
-  persistSavedFunnels();
-  rebuildSavedFunnelTabs();
-  const btn = document.querySelector(`.tab[data-sf="${id}"]`);
-  if(btn) showTab(id, btn);
+  const same = savedFunnels.find(f => (f.name||'').toLowerCase() === name.toLowerCase());
+  let id;
+  if(same){
+    if(!confirm(`Воронка «${same.name}» уже существует (автор: ${same.author||'—'}). Перезаписать её?`)) return;
+    id = same.id;
+  } else {
+    id = 'sf'+Date.now();
+  }
+  await saveSnapshot(funnelSnapshot(id, name));
+}
+// "Перезаписать текущую" — only when editing an opened funnel
+async function overwriteCurrentFunnel(){
+  const f = editingFunnelId && savedFunnels.find(x=>x.id===editingFunnelId);
+  if(!f){ return; }
+  if(!confirm(`Перезаписать воронку «${f.name}» текущим черновиком?`)) return;
+  await saveSnapshot(funnelSnapshot(f.id, f.name));
+}
+function updateOverwriteBtn(){
+  const b = document.getElementById('btn-overwrite'); if(!b) return;
+  const f = editingFunnelId && savedFunnels.find(x=>x.id===editingFunnelId);
+  if(f){ b.style.display=''; b.textContent='♻️ Перезаписать «'+f.name+'»'; } else b.style.display='none';
 }
 
 function rebuildSavedFunnelTabs(){
@@ -1984,7 +2052,7 @@ function rebuildSavedFunnelTabs(){
   if(savedFunnels.length){
     const sep = document.createElement('span');
     sep.className = 'tab-saved tab-saved-sep';
-    sep.textContent = 'мои воронки';
+    sep.textContent = 'воронки';
     tabsBar.appendChild(sep);
   }
   savedFunnels.forEach(f=>{
@@ -1992,6 +2060,7 @@ function rebuildSavedFunnelTabs(){
     btn.className = 'tab tab-saved';
     btn.dataset.sf = f.id;
     btn.textContent = '📁 ' + f.name;
+    if(f.author) btn.title = 'автор: ' + f.author;
     btn.onclick = function(){ showTab(f.id, this); };
     tabsBar.appendChild(btn);
     const panel = document.createElement('div');
@@ -2004,26 +2073,27 @@ function rebuildSavedFunnelTabs(){
 function renderSavedFunnel(id){
   const f = savedFunnels.find(x=>x.id===id); if(!f) return;
   const panel = document.getElementById('tab-'+id); if(!panel) return;
-  const rows = f.order.map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);  // levels in funnel order
-  const ins = buildInsights(rows, funnelDiffOf);                         // insights use the funnel difficulty
+  const rows = (f.order||[]).map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);  // levels in funnel order
+  const fdiff = r => (f.diff && f.diff[r.n]) || r.diff;                        // this funnel's own difficulty
+  const ins = buildInsights(rows, fdiff);
+  const meta = `Сохранённая воронка · ${(f.order||[]).length} уровней${f.author?` · автор: ${f.author}`:''}`;
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
       <div><span style="font-size:13px;font-weight:500">📁 ${f.name}</span>
-        <span style="font-size:11px;color:var(--text3);margin-left:8px">Сохранённая воронка · ${f.order.length} уровней · порядок зафиксирован</span></div>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">${meta}</span></div>
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="config-btn" onclick="loadSavedToDraft('${id}')" style="font-size:12px">✎ В черновик</button>
-        <button class="config-btn" onclick="renameSavedFunnel('${id}')" style="font-size:12px">✏️ Переименовать</button>
+        <button class="sync-btn" onclick="editFunnel('${id}')" style="font-size:12px">✎ Редактировать</button>
         <button class="config-btn" onclick="copySavedList('${id}')" style="font-size:12px">📋 Скопировать</button>
         <button class="config-btn" onclick="deleteSavedFunnel('${id}')" style="font-size:12px;color:var(--red)">🗑 Удалить</button>
       </div>
     </div>
-    <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length, funnelDiffOf)}</div>
-    ${levelsTableHTML(rows, false, funnelDiffOf)}
+    <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length, fdiff)}</div>
+    ${levelsTableHTML(rows, false, fdiff)}
     <div style="margin-top:28px;margin-bottom:12px">
       <span style="font-size:13px;font-weight:500">📊 Средний WR по механикам внутри сложности</span>
       <span style="font-size:11px;color:var(--text3);margin-left:8px">Для каждой сложности — общий средний Bot WR и в разрезе механик уровней</span>
     </div>
-    <div style="max-width:760px">${mechBreakdownHTML(rows, funnelDiffOf)}</div>
+    <div style="max-width:760px">${mechBreakdownHTML(rows, fdiff)}</div>
     <div style="margin-top:28px;margin-bottom:12px">
       <span style="font-size:13px;font-weight:500">💡 Инсайты этой воронки</span>
       <span style="font-size:11px;color:var(--text3);margin-left:8px">Выводы по порядку именно этой воронки</span>
@@ -2032,41 +2102,47 @@ function renderSavedFunnel(id){
     <div>${ins.bodyHTML}</div>`;
 }
 
-function loadSavedToDraft(id){
+// Open a saved funnel in the constructor for editing (loads its order + diff + landmarks + targets)
+function editFunnel(id){
   const f = savedFunnels.find(x=>x.id===id); if(!f) return;
-  if(!confirm('Загрузить эту воронку в черновик? Текущий черновик будет заменён.')) return;
+  if(!confirm(`Открыть «${f.name}» в конструкторе? Текущий черновик будет заменён.`)) return;
+  draftFunnel = [...(f.order||[])];
+  funnelDiff = {...(f.diff||{})};
+  funnelLandmarks = JSON.parse(JSON.stringify(f.landmarks||{}));
+  funnelTargets = {...(f.targets||{})};
+  persistFunnelDiff(); persistLandmarks();
+  localStorage.setItem('wq-funnel-targets', JSON.stringify(funnelTargets));
+  localStorage.setItem('wq-draft-funnel', JSON.stringify(draftFunnel));
+  editingFunnelId = id;
   const fbtn = document.querySelector(`.tab[onclick*="'funnel'"]`);
   showTab('funnel', fbtn);
-  draftFunnel = [...f.order];
-  renderPool(); renderDraftFunnel();
+  renderPool(); renderDraftFunnel(); updateOverwriteBtn();
 }
 
-function renameSavedFunnel(id){
-  const f = savedFunnels.find(x=>x.id===id); if(!f) return;
-  const name = (prompt('Новое название:', f.name) || '').trim(); if(!name) return;
-  f.name = name; persistSavedFunnels(); rebuildSavedFunnelTabs(); renderSavedFunnel(id);
-  const btn = document.querySelector(`.tab[data-sf="${id}"]`);
-  if(btn){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); }
-}
-
-function deleteSavedFunnel(id){
-  if(!confirm('Удалить эту воронку?')) return;
-  const wasActive = document.getElementById('tab-'+id)?.classList.contains('active');
-  savedFunnels = savedFunnels.filter(f=>f.id!==id);
-  persistSavedFunnels();
-  rebuildSavedFunnelTabs();
-  if(wasActive){ const fbtn = document.querySelector(`.tab[onclick*="'funnel'"]`); showTab('funnel', fbtn); }
+async function deleteSavedFunnel(id){
+  if(!confirm('Удалить эту воронку (у всех)?')) return;
+  try { await apiFunnels('DELETE', {id}); }
+  catch(e){ savedFunnels = savedFunnels.filter(f=>f.id!==id); localStorage.setItem('wq-saved-funnels', JSON.stringify(savedFunnels)); }
+  if(editingFunnelId===id) editingFunnelId=null;
+  await loadSavedFunnels();
+  const fbtn = document.querySelector(`.tab[onclick*="'funnel'"]`); showTab('funnel', fbtn);
 }
 
 function copySavedList(id){
   const f = savedFunnels.find(x=>x.id===id); if(!f) return;
-  const text = f.order.map((n,i)=>{const r=LEVELS.find(x=>x.n===n);return `${i+1}. ${r?r.name:'?'} (#${n}) — Bot WR: ${r?Math.round(r.botwr*100):0}%`;}).join('\n');
+  const text = (f.order||[]).map((n,i)=>{const r=LEVELS.find(x=>x.n===n);return `${i+1}. ${r?r.name:'?'} (#${n}) — Bot WR: ${r&&r.botwr!=null?Math.round(r.botwr*100)+'%':'—'}`;}).join('\n');
   navigator.clipboard.writeText(text).then(()=>{const btn=event.target,orig=btn.textContent;btn.textContent='✓ Скопировано!';setTimeout(()=>btn.textContent=orig,1500);});
 }
 
-// Restore saved funnel tabs — runs last, after all state declarations are initialized
-rebuildSavedFunnelTabs();
-loadShots();   // fetch available level screenshots (deployed only)
+// Clear buttons for the constructor
+function clearTargets(){ if(!confirm('Очистить ручные таргеты? Останутся значения из дока.')) return; funnelTargets={}; localStorage.setItem('wq-funnel-targets','{}'); renderDraftFunnel(); }
+function clearLandmarks(){ if(!confirm('Очистить все ориентиры в черновике?')) return; funnelLandmarks={}; persistLandmarks(); renderDraftFunnel(); }
+
+// Runs last, after all state declarations are initialized
+rebuildSavedFunnelTabs();   // show cached funnels instantly
+loadSavedFunnels();         // then refresh from shared KV store
+loadShots();                // fetch available level screenshots (deployed only)
+{ const el=document.getElementById('user-name'); if(el && userName) el.textContent='👤 '+userName; }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeShot(); });
 </script>
 </body>
