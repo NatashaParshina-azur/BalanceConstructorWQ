@@ -1572,12 +1572,13 @@ async function loadShots(){
     if(!resp.ok) return;
     const map = await resp.json();
     const idx = {};
-    for(const base in map) idx[base.toLowerCase().trim()] = map[base];
+    for(const base in map) idx[normShot(base)] = map[base];
     levelShots = idx;
     if(typeof rendered !== 'undefined' && rendered.funnel) renderPool();  // show icons once loaded
   } catch(e){ /* deployed-only; ignore locally */ }
 }
-function shotFile(r){ return levelShots[(r.name||'').toLowerCase().trim()] || null; }
+function normShot(s){ return String(s||'').toLowerCase().trim().replace(/^level[_\s-]+/,''); }
+function shotFile(r){ return levelShots[normShot(r.name)] || null; }
 function shotUrl(file){ return `/api/shot?file=${encodeURIComponent(file)}`; }
 function shotIcon(r){
   const f = shotFile(r);
