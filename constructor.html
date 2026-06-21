@@ -294,6 +294,12 @@
   .fc-target-inp::-webkit-outer-spin-button, .fc-target-inp::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
   .fc-target-pct { font-size:9px; color:var(--text3); }
   .pf-active, .lf-active { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
+  /* mechanic tri-state chips: off / include (green) / exclude (red) */
+  .mech-chip { font-size:11px; padding:3px 9px; border-radius:12px; border:0.5px solid var(--border2); background:var(--surface); color:var(--text2); cursor:pointer; transition:all .12s; }
+  .mech-chip:hover { border-color:var(--accent); color:var(--text); }
+  .mech-chip.mech-inc { background:var(--green-light); color:var(--green); border-color:var(--green); font-weight:600; }
+  .mech-chip.mech-exc { background:var(--red-light); color:var(--red); border-color:var(--red); font-weight:600; }
+  .mech-chip.active-all { background:var(--accent); color:#fff; border-color:var(--accent); }
   .drop-hint { text-align:center; padding:40px 12px; color:var(--text3); font-size:12px; border:1.5px dashed var(--border2); border-radius:var(--r-md); }
   .funnel-sep { display:flex; align-items:center; gap:8px; padding:3px 4px; font-size:10px; color:var(--text3); user-select:none; }
   .funnel-sep input { font-size:10px; padding:2px 6px; border:0.5px solid var(--border2); border-radius:5px; background:var(--surface2); color:var(--text); width:100%; }
@@ -426,12 +432,8 @@
             style="width:100%;padding:6px 10px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:12px">
         </div>
         <div class="filter-row" style="margin-bottom:6px;gap:4px;flex-wrap:wrap">
-          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Тип механики:</span>
-          <button class="config-btn pf-active" onclick="setPoolFilter('type','')" id="pf-all" style="font-size:11px;padding:3px 8px">Все</button>
-          <button class="config-btn" onclick="setPoolFilter('type','basic')" id="pf-basic" style="font-size:11px;padding:3px 8px">basic</button>
-          <button class="config-btn" onclick="setPoolFilter('type','garage')" id="pf-garage" style="font-size:11px;padding:3px 8px">garage</button>
-          <button class="config-btn" onclick="setPoolFilter('type','conveyor')" id="pf-conv" style="font-size:11px;padding:3px 8px">conveyor</button>
-          <button class="config-btn" onclick="setPoolFilter('type','mixed')" id="pf-mixed" style="font-size:11px;padding:3px 8px">multiple</button>
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Тип механики (тап: <span style="color:var(--green)">+ нужен</span> → <span style="color:var(--red)">− исключить</span> → выкл):</span>
+          <span id="pf-mech" style="display:flex;gap:4px;flex-wrap:wrap;width:100%"></span>
         </div>
         <div class="filter-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;align-items:center">
           <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Подтип / состав:</span>
@@ -1416,17 +1418,40 @@ function funnelInit() {
   if (saved) { try { draftFunnel = JSON.parse(saved); } catch(e) { draftFunnel = [...liveFunnel]; } }
   else { draftFunnel = [...liveFunnel]; }
   // reset filters
-  poolFilterType = ''; poolFilterWr.clear(); poolWrMin = 0; poolWrMax = 100;
+  poolMech = {}; poolFilterWr.clear(); poolWrMin = 0; poolWrMax = 100;
   poolFilterSubtype = ''; poolFilterComp = ''; poolGarMin = null; poolGarMax = null;
   ['pf-subtype','pf-comp'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   ['pool-gar-min','pool-gar-max'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   ['pf-killer','pf-vhard','pf-hard-wr','pf-normal-wr','pf-easy-wr','pf-izzy-wr'].forEach(id => document.getElementById(id)?.classList.remove('pf-active'));
-  document.getElementById('pf-all')?.classList.add('pf-active');
+  renderMechFilter();
   renderPool(); renderLiveFunnel(); renderDraftFunnel(); updateFunnelMetrics();
 }
 
-let poolFilterType = '';
+let poolMech = {};              // mechanic tri-state filter: { key: 'include' | 'exclude' }
 let poolFilterWr = new Set();   // multi-select set of WR category keys
+
+// Build the mechanic-type tri-state chips (include ✓ green / exclude ✕ red / off).
+function renderMechFilter(){
+  const cont = document.getElementById('pf-mech'); if(!cont) return;
+  const mechs = mechanicsPresent(LEVELS).filter(m => m !== 'mixed');   // drop "multiple"
+  let html = `<button class="mech-chip${Object.keys(poolMech).length===0?' active-all':''}" onclick="clearPoolMech()">Все</button>`;
+  html += mechs.map(m=>{
+    const st = poolMech[m];
+    const cls = st==='include' ? 'mech-inc' : st==='exclude' ? 'mech-exc' : '';
+    const sym = st==='exclude' ? '− ' : '+ ';
+    const label = MECH_META[m] ? MECH_META[m].label : m;
+    return `<button class="mech-chip ${cls}" onclick="togglePoolMech('${m}')">${sym}${label}</button>`;
+  }).join('');
+  cont.innerHTML = html;
+}
+function togglePoolMech(m){
+  const s = poolMech[m];
+  if(!s) poolMech[m]='include';        // off → include
+  else if(s==='include') poolMech[m]='exclude';  // include → exclude
+  else delete poolMech[m];              // exclude → off
+  renderMechFilter(); renderPool();
+}
+function clearPoolMech(){ poolMech = {}; renderMechFilter(); renderPool(); }
 let poolFilterSubtype = '';
 let poolFilterComp = '';
 let poolWrMin = 0;    // 0–100
@@ -1466,7 +1491,6 @@ function onPoolWrRange() {
 const WR_BTN_ID = {killer:'killer',vhard:'vhard',hard:'hard-wr',normal:'normal-wr',easy:'easy-wr',izzy:'izzy-wr'};
 
 function setPoolFilter(dim, val) {
-  if (dim === 'type') poolFilterType = val;
   if (dim === 'wr') {
     if (val === '') {                       // ✕ сброс — clear all categories
       poolFilterWr.clear();
@@ -1482,13 +1506,6 @@ function setPoolFilter(dim, val) {
     const lbl = document.getElementById('pool-wr-range-label');
     if(lbl) lbl.textContent = '0% – 100%';
   }
-
-  // Update button active states — type group
-  ['all','basic','garage','conv','mixed'].forEach(id => {
-    document.getElementById('pf-'+id)?.classList.remove('pf-active');
-  });
-  const typeMap = {'':'all','basic':'basic','garage':'garage','conveyor':'conv','mixed':'mixed'};
-  document.getElementById('pf-'+(typeMap[poolFilterType]||'all'))?.classList.add('pf-active');
 
   // WR category group — reflect the multi-select set
   for(const k in WR_BTN_ID){ document.getElementById('pf-'+WR_BTN_ID[k])?.classList.toggle('pf-active', poolFilterWr.has(k)); }
@@ -1512,6 +1529,7 @@ function renderPool() {
   const search = document.getElementById('pool-search')?.value.toLowerCase() || '';
   const pool = document.getElementById('funnel-pool');
   if (!pool) return;
+  renderMechFilter();   // keep mechanic chips in sync with current data/state
   const inDraft = new Set(draftFunnel);
 
   // WR filter: selected categories (multi-select, union) take precedence over the slider
@@ -1520,8 +1538,13 @@ function renderPool() {
   const useCats = cats.length > 0;
   const sliderMin = poolWrMin/100, sliderMax = poolWrMax/100;
   const wrFilterActive = useCats || poolWrMin>0 || poolWrMax<100;
+  // mechanic tri-state: must have ALL includes, must have NONE of the excludes
+  const mechInc = Object.keys(poolMech).filter(k=>poolMech[k]==='include');
+  const mechExc = Object.keys(poolMech).filter(k=>poolMech[k]==='exclude');
   const filtered = LEVELS.filter(r => {
-    if (poolFilterType && !(r.mechanics||[]).includes(poolFilterType)) return false;
+    const ms = r.mechanics||[];
+    if (mechInc.length && !mechInc.every(m=>ms.includes(m))) return false;
+    if (mechExc.some(m=>ms.includes(m))) return false;
     if (poolFilterSubtype && r.subtype !== poolFilterSubtype) return false;
     if (poolFilterComp && r.composition !== poolFilterComp) return false;
     if (poolGarMin != null || poolGarMax != null) {   // garages-count range
