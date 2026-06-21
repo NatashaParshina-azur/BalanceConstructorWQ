@@ -334,7 +334,7 @@
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="sync-status" id="sync-status"></span>
-    <input type="text" id="quick-sheet-name" placeholder="Имя листа" value="Levels 5.0"
+    <input type="text" id="quick-sheet-name" placeholder="Имя листа" value="Levels 6.0"
       style="font-size:12px;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);width:130px">
     <button class="config-btn" onclick="document.getElementById('config-overlay').classList.add('open')">⚙</button>
     <button class="sync-btn" id="sync-btn" onclick="syncSheets()">↻ Обновить</button>
@@ -610,7 +610,7 @@
     </div>
 
     <label>Google Sheets ID</label>
-    <input type="text" id="sheets-id" placeholder="1PnrFE3vhBr_QOnbAr_hq8TM-QHvGw4atF29QXjao864" value="">
+    <input type="text" id="sheets-id" placeholder="1PnrFE3vhBr_QOnbAr_hq8TM-QHvGw4atF29QXjao864" value="1q9oS_R6HzrfBo2CwFjj5yoxlnfgqViJTUAHNUpIcNYY">
 
     <p style="margin-top:12px;font-size:11px;color:var(--text3)">
       Если таблица приватная — нужен API Key от Google Cloud Console (Sheets API v4). Для публичных таблиц не нужен.
@@ -620,7 +620,7 @@
 
     <p style="margin-top:16px;font-size:12px;font-weight:500">Лист с уровнями</p>
     <p style="font-size:11px;color:var(--text3)">Название листа в твоей таблице.</p>
-    <input type="text" id="sheet-levels" value="Levels 5.0">
+    <input type="text" id="sheet-levels" value="Levels 6.0">
 
     <div class="modal-actions">
       <button class="btn-secondary" onclick="document.getElementById('config-overlay').classList.remove('open')">Отмена</button>
@@ -642,7 +642,10 @@ const BUILTIN_LEVELS = [{"n": 1, "name": "Tutorial", "type": "tutorial", "diff":
 let LEVELS = [...BUILTIN_LEVELS];
 let sortField = null, sortDir = -1;
 let charts = {};
+const DEFAULT_SHEET_ID = '1q9oS_R6HzrfBo2CwFjj5yoxlnfgqViJTUAHNUpIcNYY';   // fixed Google Sheets id
+const DEFAULT_SHEET_NAME = 'Levels 6.0';                                    // used only on first load (no saved choice)
 let config = JSON.parse(localStorage.getItem('wq-config') || '{}');
+if(!config.sheetsId) config.sheetsId = DEFAULT_SHEET_ID;   // always have the sheet id so it auto-loads
 let levelAutoFilter = '';  // for Уровни 5.0 auto-tag filter
 
 // Difficulty has TWO layers:
@@ -715,7 +718,7 @@ async function syncSheets() {
   try {
     // Read sheet name from quick input (header bar) — always takes priority
     const quickInput = document.getElementById('quick-sheet-name');
-    const sheetName = quickInput?.value?.trim() || config.sheetLevels || 'Levels 5.0';
+    const sheetName = quickInput?.value?.trim() || config.sheetLevels || DEFAULT_SHEET_NAME;
     // Sync back to config and persist, so last-used sheet is remembered on reload
     config.sheetLevels = sheetName;
     document.getElementById('sheet-levels').value = sheetName;
@@ -1301,8 +1304,8 @@ function showTab(id, btn) {
 if(config.sheetsId) {
   document.getElementById('sheets-id').value = config.sheetsId;
   document.getElementById('api-key').value = config.apiKey||'';
-  document.getElementById('sheet-levels').value = config.sheetLevels||'Levels 5.0';
-  document.getElementById('quick-sheet-name').value = config.sheetLevels||'Levels 5.0';
+  document.getElementById('sheet-levels').value = config.sheetLevels||DEFAULT_SHEET_NAME;
+  document.getElementById('quick-sheet-name').value = config.sheetLevels||DEFAULT_SHEET_NAME;
   // Auto-load last-used sheet on open, so we don't show stale built-in data
   syncSheets();
 }
@@ -1665,8 +1668,7 @@ function renderPool() {
     const atTag = autoWrBadge(r.botwr);
     const fp = finalPos(r.n);
     return `<div class="funnel-card${inD?' in-draft':''}" draggable="true" data-n="${r.n}"
-      ondragstart="poolDragStart(event,${r.n})" ondblclick="addToDraft(${r.n})"
-      title="${inD?'В черновике':'Двойной клик или перетащи'}">
+      ondragstart="poolDragStart(event,${r.n})" ondblclick="addToDraft(${r.n})">
       <span class="fc-pos" title="Позиция в финальной воронке">${fp??'—'}</span>
       <span class="fc-hash" title="Номер уровня">#${r.n}</span>
       <span class="fc-name">${r.name}</span>
@@ -1740,6 +1742,7 @@ function scaffoldMax(){
 function renderDraftFunnel() {
   const el = document.getElementById('funnel-draft');
   if (!el) return;
+  localStorage.setItem('wq-draft-funnel', JSON.stringify(draftFunnel));   // auto-save draft order so it (and landmarks) survive reloads
   const rowCount = Math.max(draftFunnel.length, scaffoldMax());
   if (rowCount === 0) {
     el.innerHTML = '<div class="drop-hint">Перетащи уровни сюда из банка<br>или нажми + на плашке уровня</div>';
