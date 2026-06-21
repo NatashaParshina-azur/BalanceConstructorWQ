@@ -367,6 +367,7 @@
           <th>№ <button class="sort-btn" onclick="sortBy('n')">▲▼</button></th>
           <th>Название</th>
           <th>Тип</th>
+          <th>Garages</th>
           <th style="white-space:nowrap">Сложность</th>
           <th style="white-space:nowrap">Авто-тег <span style="font-size:9px;color:var(--text3);font-weight:400">(Bot WR)</span></th>
           <th>Subtype</th>
@@ -809,6 +810,7 @@ function parseSheetLevels(rows) {
   const iUsersWr  = headers.findIndex(h => (h.includes('user') || h.includes('юзер') || h.includes('игрок')) && (h.includes('wr') || h.includes('win')));
   const iDiff     = idx('сложность');
   const iType     = idx('level type');
+  const iGarages  = idx('garages');
   const iFeatures = idx('фичи');
   const iTarget   = headers.findIndex(h => h.includes('target') && !h.includes('diff')); // WR target (not "Diff target")
   const iDiffTarget = idx('diff target'); // target editorial difficulty per position
@@ -870,6 +872,7 @@ function parseSheetLevels(rows) {
       name:    iName    >= 0 ? r[iName]    : '',
       type,
       mechanics,
+      garages: iGarages >= 0 ? String(r[iGarages]||'').trim() : '',
       target,
       diffTarget,
       tries,
@@ -980,6 +983,7 @@ function levelRowHTML(r, diffFn){
       <td style="color:var(--text3);font-size:11px">${r.n}</td>
       <td style="font-weight:500">${r.name}</td>
       <td><div class="mech-cap">${mechBadges(r)}</div></td>
+      <td style="font-size:11px;color:var(--text2)">${r.garages ? r.garages : '<span style="color:var(--text3)">—</span>'}</td>
       <td>${diffBadgeRO(diff)}</td>
       <td>${autoWrBadge(r.botwr)}</td>
       <td style="font-size:11px;color:var(--text2)">${r.subtype||'—'}</td>
@@ -1027,6 +1031,7 @@ function levelsTableHTML(rows, sortable, diffFn){
     <th>${sb('n','№')}</th>
     <th>Название</th>
     <th>Тип</th>
+    <th>Garages</th>
     <th style="white-space:nowrap">Сложность</th>
     <th style="white-space:nowrap">Авто-тег <span style="font-size:9px;color:var(--text3);font-weight:400">(Bot WR)</span></th>
     <th>Subtype</th>
