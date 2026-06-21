@@ -1,6 +1,8 @@
 // Lists screenshots in the private Unity repo's LevelScreenshots folder.
 // Returns JSON { "<basename>": "<filename>", ... }. Uses GITHUB_TOKEN from Netlify env.
-const OWNER = 'azur-games', REPO = 'wool-crush-clone', BRANCH = 'main', DIR = 'LevelScreenshots';
+const OWNER = 'azur-games', REPO = 'wool-crush-clone';
+const BRANCH = process.env.SCREENSHOTS_BRANCH || 'main';
+const DIR = process.env.SCREENSHOTS_DIR || 'LevelScreenshots';
 
 exports.handler = async () => {
   const token = process.env.GITHUB_TOKEN;

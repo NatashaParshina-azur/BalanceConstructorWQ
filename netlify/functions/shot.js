@@ -1,6 +1,8 @@
 // Returns a single level screenshot (binary) from the private Unity repo.
 // Called as /.netlify/functions/shot?file=<filename>. Uses GITHUB_TOKEN from Netlify env.
-const OWNER = 'azur-games', REPO = 'wool-crush-clone', BRANCH = 'main', DIR = 'LevelScreenshots';
+const OWNER = 'azur-games', REPO = 'wool-crush-clone';
+const BRANCH = process.env.SCREENSHOTS_BRANCH || 'main';
+const DIR = process.env.SCREENSHOTS_DIR || 'LevelScreenshots';
 const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
 
 exports.handler = async (event) => {
