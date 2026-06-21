@@ -1575,7 +1575,18 @@ async function loadShots(){
     for(const base in map) idx[normShot(base)] = map[base];
     levelShots = idx;
     if(typeof rendered !== 'undefined' && rendered.funnel) renderPool();  // show icons once loaded
+    prefetchShots();   // warm the browser cache so hover preview is instant
   } catch(e){ /* deployed-only; ignore locally */ }
+}
+// Preload screenshots in the background (staggered) so they're cached before hover.
+function prefetchShots(){
+  const files = [...new Set(Object.values(levelShots))];
+  let i = 0;
+  (function next(){
+    if(i >= files.length) return;
+    const im = new Image(); im.src = shotUrl(files[i++]);
+    setTimeout(next, 120);
+  })();
 }
 function normShot(s){ return String(s||'').toLowerCase().trim().replace(/^level[_\s-]+/,''); }
 function shotFile(r){ return levelShots[normShot(r.name)] || null; }
@@ -1584,7 +1595,7 @@ function shotIcon(r){
   const f = shotFile(r);
   if(!f) return '';
   const fe = f.replace(/'/g,'%27'), ne = (r.name||'').replace(/'/g,'%27');
-  return `<span class="fc-shot" onmouseenter="showShot(event,'${fe}')" onmousemove="moveShot(event)" onmouseleave="hideShot()" onclick="event.stopPropagation();openShot('${fe}','${ne}')" title="Превью уровня — наведи или кликни">🖼</span>`;
+  return `<span class="fc-shot" onmouseenter="showShot(event,'${fe}')" onmousemove="moveShot(event)" onmouseleave="hideShot()" onclick="event.stopPropagation();openShot('${fe}','${ne}')">🖼</span>`;
 }
 function showShot(e, file){
   const pop = document.getElementById('shot-pop'); const img = document.getElementById('shot-pop-img');
