@@ -2044,6 +2044,25 @@ function updateOverwriteBtn(){
   if(f){ b.style.display=''; b.textContent='♻️ Перезаписать «'+f.name+'»'; } else b.style.display='none';
 }
 
+// Saved-funnel table = the Уровни columns + a leading "Поз." (funnel order) + a trailing "Ориентиры"
+// (landmarks keyed by funnel position; the original level number is irrelevant here).
+function savedFunnelTableHTML(f, fdiff){
+  const rows = (f.order||[]).map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);
+  const head = ['Поз.','№','Название','Тип','Garages','Сложность','Авто-тег','Subtype','Composition','Нитки','Bot WR','Users WR','Попытки','Фичи','Ориентиры']
+    .map(h=>`<th>${h}</th>`).join('');
+  const body = rows.map((r,i)=>{
+    const pos = i+1;
+    const lms = (f.landmarks && f.landmarks[pos]) || [];
+    const lmCell = lms.length
+      ? lms.map(lm=>{ const st = lm.c ? `background:${lm.c}1f;color:${lm.c};border:0.5px solid ${lm.c}55` : 'background:var(--accent-light);color:var(--accent)'; const icon=(lm.t==='Сложный'||lm.t==='Супер Сложный')?'':'📍 '; return `<span class="fc-lm has" style="${st};cursor:default">${icon}${lm.t}</span>`; }).join(' ')
+      : '<span style="color:var(--text3)">—</span>';
+    return levelRowHTML(r, fdiff)
+      .replace('<tr>', `<tr><td style="color:var(--text3);font-size:11px;font-weight:600">${pos}</td>`)
+      .replace('</tr>', `<td style="white-space:normal;max-width:220px;line-height:1.7">${lmCell}</td></tr>`);
+  }).join('');
+  return `<div class="table-wrap"><table class="lvl-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
 function rebuildSavedFunnelTabs(){
   document.querySelectorAll('.tab-saved').forEach(t=>t.remove());
   document.querySelectorAll('.panel-saved').forEach(p=>p.remove());
@@ -2088,7 +2107,7 @@ function renderSavedFunnel(id){
       </div>
     </div>
     <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length, fdiff)}</div>
-    ${levelsTableHTML(rows, false, fdiff)}
+    ${savedFunnelTableHTML(f, fdiff)}
     <div style="margin-top:28px;margin-bottom:12px">
       <span style="font-size:13px;font-weight:500">📊 Средний WR по механикам внутри сложности</span>
       <span style="font-size:11px;color:var(--text3);margin-left:8px">Для каждой сложности — общий средний Bot WR и в разрезе механик уровней</span>
