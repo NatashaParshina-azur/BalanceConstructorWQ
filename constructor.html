@@ -609,20 +609,24 @@ let charts = {};
 let config = JSON.parse(localStorage.getItem('wq-config') || '{}');
 let levelAutoFilter = '';  // for Уровни 5.0 auto-tag filter
 
-// Manual editorial difficulty tags (Сложный / Супер Сложный), keyed by level number.
-// Levels import with tags from the sheet; user overrides persist here on top of each import.
-let diffOverrides = JSON.parse(localStorage.getItem('wq-diff-overrides') || '{}');
-function applyDiffOverrides(){ LEVELS.forEach(r => { if(diffOverrides[r.n] != null) r.diff = diffOverrides[r.n]; }); }
+// Difficulty has TWO layers:
+//   r.diff      — imported from the sheet, READ-ONLY (shown in the Уровни table).
+//   funnelDiff  — edits made in the FUNNEL only; they never change the imported r.diff.
+let funnelDiff = JSON.parse(localStorage.getItem('wq-funnel-diff') || '{}');
+// One-time migration: old global overrides (which used to change the imported value) become funnel-only.
+if(!localStorage.getItem('wq-funnel-diff')){
+  const old = localStorage.getItem('wq-diff-overrides');
+  if(old){ try{ funnelDiff = JSON.parse(old); localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff)); }catch(e){} }
+}
+function funnelDiffOf(r){ return funnelDiff[r.n] || r.diff; }   // effective difficulty inside the funnel
+function persistFunnelDiff(){ localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff)); }
 
-// Set/clear a level's editorial difficulty tag and re-render every view that shows it.
+// Change a level's funnel difficulty (editable only in the funnel; never touches the imported value).
 function setDiffTag(n, value){
   const lvl = LEVELS.find(r => r.n === n); if(!lvl) return;
-  diffOverrides[n] = value;
-  lvl.diff = value;
-  localStorage.setItem('wq-diff-overrides', JSON.stringify(diffOverrides));
-  renderLevels();   // also refreshes the Levels-tab insights
-  if(typeof rendered !== 'undefined' && rendered.funnel){ renderPool(); renderLiveFunnel(); renderDraftFunnel(); }
-  // refresh the currently open saved-funnel tab, if any
+  if(value === lvl.diff) delete funnelDiff[n]; else funnelDiff[n] = value;  // matching import = no override
+  persistFunnelDiff();
+  if(typeof rendered !== 'undefined' && rendered.funnel){ renderPool(); renderDraftFunnel(); }
   const activeSaved = document.querySelector('.panel-saved.active');
   if(activeSaved) renderSavedFunnel(activeSaved.id.replace('tab-',''));
 }
@@ -630,21 +634,21 @@ function cycleDiffTag(e, n){
   e.stopPropagation(); e.preventDefault();
   const order = ['normal','hard','superhard'];           // easywin → normal at start of cycle
   const lvl = LEVELS.find(r => r.n === n); if(!lvl) return;
-  const i = order.indexOf(lvl.diff);
+  const i = order.indexOf(funnelDiffOf(lvl));
   setDiffTag(n, order[(i + 1) % order.length]);
 }
-// Dropdown for the Уровни table — precise control over all four states.
-function diffSelect(n, diff){
-  const opts = [['normal','—'],['easywin','Лёгкий'],['hard','Сложный'],['superhard','Супер сложный']];
-  return `<select class="diff-select diff-sel-${diff}" onchange="setDiffTag(${n}, this.value)" title="Тег сложности (можно менять вручную)">`
-    + opts.map(([v,l]) => `<option value="${v}"${v===diff?' selected':''}>${l}</option>`).join('')
-    + `</select>`;
+// Read-only difficulty badge for tables (imported value — not editable).
+function diffBadgeRO(diff){
+  if(diff==='superhard') return '<span class="badge b-superhard">Супер Сложный</span>';
+  if(diff==='hard')      return '<span class="badge b-hard">Сложный</span>';
+  if(diff==='easywin')   return '<span class="badge b-easywin">Лёгкий</span>';
+  return '<span style="font-size:11px;color:var(--text3)">—</span>';
 }
-// Compact clickable chip for funnel cards — click cycles the tag.
+// Compact clickable chip for funnel cards — click cycles the funnel-only difficulty.
 function diffCycleBadge(n, diff){
-  if(diff==='superhard') return `<span class="badge b-superhard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы сменить тег">Супер Сложный</span>`;
-  if(diff==='hard')      return `<span class="badge b-hard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы сменить тег">Сложный</span>`;
-  return `<span class="diff-cycle diff-cycle-empty" onclick="cycleDiffTag(event,${n})" title="Клик, чтобы поставить тег">+ тег</span>`;
+  if(diff==='superhard') return `<span class="badge b-superhard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик — сменить (только в воронке)">Супер Сложный</span>`;
+  if(diff==='hard')      return `<span class="badge b-hard diff-cycle" onclick="cycleDiffTag(event,${n})" title="Клик — сменить (только в воронке)">Сложный</span>`;
+  return `<span class="diff-cycle diff-cycle-empty" onclick="cycleDiffTag(event,${n})" title="Клик — поставить (только в воронке)">+ тег</span>`;
 }
 
 // ─────────────────────────────────────────────
@@ -685,7 +689,6 @@ async function syncSheets() {
     if (data && data.length > 1) {
       LEVELS = parseSheetLevels(data);
       ensureMechanics(LEVELS); // guarantee mechanics[] on every level
-      applyDiffOverrides(); // re-apply manual Сложный/Супер Сложный tags on top of fresh import
       document.getElementById('source-badge').innerHTML = `<span class="ds-sheets">⬤ ${sheetName}</span>`;
       status.textContent = `✓ ${LEVELS.length} уровней · ${new Date().toLocaleTimeString('ru')}`;
       renderLevels();
@@ -965,17 +968,19 @@ function setLevelAutoFilter(key) {
   renderLevels();
 }
 
-// One table row for a level — shared by the Levels tab and saved-funnel tabs
-function levelRowHTML(r){
+// One table row for a level — shared by the Levels tab and saved-funnel tabs.
+// diffFn picks which difficulty to show (imported r.diff for Уровни, funnelDiffOf for funnels) — read-only.
+function levelRowHTML(r, diffFn){
   const hasBot = r.botwr != null;
   const bwr = hasBot ? Math.round(r.botwr*100) : null;
   const uwr = r.userswr ? Math.round(r.userswr*100) : null;
   const barW = hasBot ? Math.round(r.botwr*56) : 0;
+  const diff = (diffFn||(x=>x.diff))(r);
   return `<tr>
       <td style="color:var(--text3);font-size:11px">${r.n}</td>
       <td style="font-weight:500">${r.name}</td>
       <td><div class="mech-cap">${mechBadges(r)}</div></td>
-      <td>${diffSelect(r.n, r.diff)}</td>
+      <td>${diffBadgeRO(diff)}</td>
       <td>${autoWrBadge(r.botwr)}</td>
       <td style="font-size:11px;color:var(--text2)">${r.subtype||'—'}</td>
       <td style="font-size:11px;color:var(--text2)">${r.composition||'—'}</td>
@@ -994,13 +999,14 @@ function levelRowHTML(r){
 function avgBotPct(arr){ const v = arr.filter(r=>r.botwr!=null); return v.length ? (v.reduce((s,r)=>s+r.botwr,0)/v.length*100).toFixed(1) : '—'; }
 
 // Metrics block (inner .metric divs) — shared by the Levels tab and saved-funnel tabs
-function levelMetricsHTML(data, total){
+function levelMetricsHTML(data, total, diffFn){
+  const df = diffFn || (r=>r.diff);
   const avgBot = avgBotPct(data);
   const withUWR = data.filter(r=>r.userswr);
   const avgUser = withUWR.length ? (withUWR.reduce((s,r)=>s+r.userswr,0)/withUWR.length*100).toFixed(1) : '—';
-  const normals = data.filter(r=>r.diff==='normal');
-  const hards   = data.filter(r=>r.diff==='hard');
-  const shards  = data.filter(r=>r.diff==='superhard');
+  const normals = data.filter(r=>df(r)==='normal');
+  const hards   = data.filter(r=>df(r)==='hard');
+  const shards  = data.filter(r=>df(r)==='superhard');
   const avgNorm = avgBotPct(normals);
   const avgHard = avgBotPct(hards);
   const avgSH   = avgBotPct(shards);
@@ -1015,7 +1021,7 @@ function levelMetricsHTML(data, total){
 }
 
 // Full levels table (with optional sort buttons) — used by saved-funnel tabs
-function levelsTableHTML(rows, sortable){
+function levelsTableHTML(rows, sortable, diffFn){
   const sb = (f,lbl)=> sortable ? `${lbl} <button class="sort-btn" onclick="sortBy('${f}')">▲▼</button>` : lbl;
   return `<div class="table-wrap"><table class="lvl-table"><thead><tr>
     <th>${sb('n','№')}</th>
@@ -1030,17 +1036,18 @@ function levelsTableHTML(rows, sortable){
     <th>${sb('userswr','Users WR')}</th>
     <th>${sb('tries','Попытки')}</th>
     <th style="min-width:170px">Фичи</th>
-  </tr></thead><tbody>${rows.map(levelRowHTML).join('')}</tbody></table></div>`;
+  </tr></thead><tbody>${rows.map(r=>levelRowHTML(r, diffFn)).join('')}</tbody></table></div>`;
 }
 
 // Average Bot WR by mechanic WITHIN each difficulty — info table. Shared by Levels tab & saved funnels.
-function mechBreakdownHTML(rows){
+function mechBreakdownHTML(rows, diffFn){
+  const df = diffFn || (r=>r.diff);
   const diffs = [
     {key:'easywin',  label:'Лёгкие'},
     {key:'normal',   label:'Нормальные'},
     {key:'hard',     label:'Сложные'},
     {key:'superhard',label:'Супер сложные'}
-  ].filter(d=>rows.some(r=>r.diff===d.key));
+  ].filter(d=>rows.some(r=>df(r)===d.key));
   const mechs = mechanicsPresent(rows);
   const avgPct = arr => { const v=arr.filter(r=>r.botwr!=null); return v.length ? (v.reduce((s,r)=>s+r.botwr,0)/v.length*100) : null; };
   const cell = arr => {
@@ -1051,7 +1058,7 @@ function mechBreakdownHTML(rows){
   };
   const head = `<tr><th style="text-align:left">Сложность</th><th style="text-align:center">Всего</th>${mechs.map(m=>`<th style="text-align:center">${MECH_META[m]?MECH_META[m].label:m}</th>`).join('')}</tr>`;
   const body = diffs.map(d=>{
-    const dl = rows.filter(r=>r.diff===d.key);
+    const dl = rows.filter(r=>df(r)===d.key);
     return `<tr><td style="font-weight:500">${d.label}</td>${cell(dl)}${mechs.map(m=>cell(dl.filter(r=>(r.mechanics||[]).includes(m)))).join('')}</tr>`;
   }).join('');
   return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
@@ -1074,7 +1081,7 @@ function renderLevels() {
   });
   if(sortField) data = [...data].sort((a,b)=>(a[sortField]-(b[sortField]||0))*sortDir);
 
-  document.getElementById('levels-tbody').innerHTML = data.map(levelRowHTML).join('');
+  document.getElementById('levels-tbody').innerHTML = data.map(r=>levelRowHTML(r)).join('');
   document.getElementById('level-metrics').innerHTML = levelMetricsHTML(data, LEVELS.length);
 
   // Bottom analytics — over ALL levels, in sheet (live funnel) order
@@ -1094,7 +1101,8 @@ function sortBy(f) {
 // ─────────────────────────────────────────────
 // Build insights for an ordered list of levels (progression order). Returns {metricsHTML, bodyHTML}.
 // Used both for the Levels tab (all levels in sheet order) and for each saved funnel (its own order).
-function buildInsights(orderedRows){
+function buildInsights(orderedRows, diffFn){
+  const df = diffFn || (r=>r.diff);
   const L = orderedRows.filter(r=>r.type!=='tutorial');      // analytics exclude tutorial
   const seq = orderedRows;                                    // progression order as given
   const pct = x => (x==null) ? '—' : (x*100).toFixed(1);
@@ -1136,11 +1144,11 @@ function buildInsights(orderedRows){
   if(cliffs.length) s1.push(card(cliffs.length>5?'crit':'warn','📉',
     `${cliffs.length} резких скачков сложности`,
     `Падение Bot WR ≥ 50 пп между соседями: ${cliffs.slice(0,6).map(c=>`<b>#${c.a.n}→#${c.b.n}</b> (−${Math.round(c.drop*100)}пп)`).join(', ')}. Резкие стены повышают отток — стоит добавить промежуточные уровни.`));
-  const hiddenHard = L.filter(r=>r.diff==='normal'&&r.botwr!=null&&r.botwr<0.15);
+  const hiddenHard = L.filter(r=>df(r)==='normal'&&r.botwr!=null&&r.botwr<0.15);
   if(hiddenHard.length) s1.push(card('warn','🏷️',
     `${hiddenHard.length} «нормальных», но фактически очень сложных`,
     `Размечены как normal, но Bot WR < 15%: <b>${lvlsCap(hiddenHard)}</b>. Проверь редакторскую разметку сложности.`));
-  const easySuper = L.filter(r=>(r.diff==='hard'||r.diff==='superhard')&&r.botwr!=null&&r.botwr>0.7);
+  const easySuper = L.filter(r=>(df(r)==='hard'||df(r)==='superhard')&&r.botwr!=null&&r.botwr>0.7);
   if(easySuper.length) s1.push(card('info','🎈',
     `${easySuper.length} «сложных», но фактически лёгких`,
     `Размечены hard/superhard, но Bot WR > 70%: <b>${lvlsCap(easySuper)}</b>. Можно усилить или переразметить.`));
@@ -1259,7 +1267,6 @@ if(config.sheetsId) {
   syncSheets();
 }
 ensureMechanics(LEVELS); // guarantee mechanics[] on built-in/initial data
-applyDiffOverrides(); // apply saved manual tags to the built-in/initial data
 renderLevels();
 
 
@@ -1506,7 +1513,7 @@ function renderPool() {
   pool.innerHTML = filtered.map(r => {
     const inD = inDraft.has(r.n);
     const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
-    const edTag = diffCycleBadge(r.n, r.diff);
+    const edTag = diffCycleBadge(r.n, funnelDiffOf(r));
     const atTag = autoWrBadge(r.botwr);
     const fp = finalPos(r.n);
     return `<div class="funnel-card${inD?' in-draft':''}" draggable="true" data-n="${r.n}"
@@ -1532,7 +1539,7 @@ function renderLiveFunnel() {
   el.innerHTML = liveFunnel.map((n,i) => {
     const r = LEVELS.find(x=>x.n===n); if(!r) return '';
     const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
-    const edTag = diffCycleBadge(r.n, r.diff);
+    const edTag = diffCycleBadge(r.n, funnelDiffOf(r));
     const atTag = autoWrBadge(r.botwr);
     return `<div class="funnel-card" style="cursor:default">
       <span class="draft-pos">${i+1}</span>
@@ -1598,7 +1605,7 @@ function renderDraftFunnel() {
       const n = draftFunnel[i]; const r = LEVELS.find(x=>x.n===n); if(!r) continue;
       const wrCol = r.botwr==null?'var(--text3)':r.botwr>=.75?'#1D9E75':r.botwr>=.5?'#BA7517':'#E24B4A';
       const changed = liveFunnel.indexOf(n) !== i;
-      const edTag = diffCycleBadge(r.n, r.diff);
+      const edTag = diffCycleBadge(r.n, funnelDiffOf(r));
       const atTag = autoWrBadge(r.botwr);
       html += `<div class="draft-row">
       <div class="funnel-card" draggable="true" data-idx="${i}" data-n="${n}"
@@ -1644,9 +1651,9 @@ function updateFunnelMetrics() {
   const avgBot = avgBotPct(inD);
   const withUWR = inD.filter(r=>r.userswr);
   const avgUser = withUWR.length ? (withUWR.reduce((s,r)=>s+r.userswr,0)/withUWR.length*100).toFixed(1) : '—';
-  const normals = inD.filter(r=>r.diff==='normal');
-  const hards   = inD.filter(r=>r.diff==='hard');
-  const shards  = inD.filter(r=>r.diff==='superhard');
+  const normals = inD.filter(r=>funnelDiffOf(r)==='normal');
+  const hards   = inD.filter(r=>funnelDiffOf(r)==='hard');
+  const shards  = inD.filter(r=>funnelDiffOf(r)==='superhard');
   const avgNorm = avgBotPct(normals);
   const avgHard = avgBotPct(hards);
   const avgSH   = avgBotPct(shards);
@@ -1698,7 +1705,7 @@ function updateFunnelBreakdown(){
     if(!rows.length) rows = LEVELS; // fallback so charts aren't empty
   } else rows = LEVELS;
 
-  const diffPresent = BD_DIFFS.filter(d=>rows.some(r=>r.diff===d.key));
+  const diffPresent = BD_DIFFS.filter(d=>rows.some(r=>funnelDiffOf(r)===d.key));
   // mechanics present, with a stable colour each (a level counts under each of its mechanics)
   const typePresent = mechanicsPresent(rows).map((m,i)=>({key:m, label:(MECH_META[m]?MECH_META[m].label:m), color: BD_MECH_COLOR[m]||BD_PALETTE[i%BD_PALETTE.length]}));
 
@@ -1708,9 +1715,9 @@ function updateFunnelBreakdown(){
     if(charts.bdDiff) charts.bdDiff.destroy();
     charts.bdDiff = new Chart(dEl.getContext('2d'),{type:'bar',
       data:{labels:diffPresent.map(d=>d.label),datasets:[{
-        data:diffPresent.map(d=>bdAvg(rows.filter(r=>r.diff===d.key))),
+        data:diffPresent.map(d=>bdAvg(rows.filter(r=>funnelDiffOf(r)===d.key))),
         backgroundColor:diffPresent.map(d=>d.color),borderRadius:4}]},
-      options:bdBarOpts(rows,diffPresent,(r,k)=>r.diff===k)});
+      options:bdBarOpts(rows,diffPresent,(r,k)=>funnelDiffOf(r)===k)});
   }
 
   // by mechanic
@@ -1731,7 +1738,7 @@ function updateFunnelBreakdown(){
     charts.bdMech = new Chart(mEl.getContext('2d'),{type:'bar',
       data:{labels:diffPresent.map(d=>d.label),
         datasets:typePresent.map(t=>({label:t.label,
-          data:diffPresent.map(d=>bdAvg(rows.filter(r=>r.diff===d.key && hasMech(r,t.key)))),
+          data:diffPresent.map(d=>bdAvg(rows.filter(r=>funnelDiffOf(r)===d.key && hasMech(r,t.key)))),
           backgroundColor:t.color,borderRadius:3}))},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:12,padding:10}},
@@ -1847,7 +1854,7 @@ function renderSavedFunnel(id){
   const f = savedFunnels.find(x=>x.id===id); if(!f) return;
   const panel = document.getElementById('tab-'+id); if(!panel) return;
   const rows = f.order.map(n=>LEVELS.find(x=>x.n===n)).filter(Boolean);  // levels in funnel order
-  const ins = buildInsights(rows);                                       // insights for THIS funnel's order
+  const ins = buildInsights(rows, funnelDiffOf);                         // insights use the funnel difficulty
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
       <div><span style="font-size:13px;font-weight:500">📁 ${f.name}</span>
@@ -1859,13 +1866,13 @@ function renderSavedFunnel(id){
         <button class="config-btn" onclick="deleteSavedFunnel('${id}')" style="font-size:12px;color:var(--red)">🗑 Удалить</button>
       </div>
     </div>
-    <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length)}</div>
-    ${levelsTableHTML(rows, false)}
+    <div class="metrics" style="margin-bottom:16px">${levelMetricsHTML(rows, rows.length, funnelDiffOf)}</div>
+    ${levelsTableHTML(rows, false, funnelDiffOf)}
     <div style="margin-top:28px;margin-bottom:12px">
       <span style="font-size:13px;font-weight:500">📊 Средний WR по механикам внутри сложности</span>
       <span style="font-size:11px;color:var(--text3);margin-left:8px">Для каждой сложности — общий средний Bot WR и в разрезе механик уровней</span>
     </div>
-    <div style="max-width:760px">${mechBreakdownHTML(rows)}</div>
+    <div style="max-width:760px">${mechBreakdownHTML(rows, funnelDiffOf)}</div>
     <div style="margin-top:28px;margin-bottom:12px">
       <span style="font-size:13px;font-weight:500">💡 Инсайты этой воронки</span>
       <span style="font-size:11px;color:var(--text3);margin-left:8px">Выводы по порядку именно этой воронки</span>
