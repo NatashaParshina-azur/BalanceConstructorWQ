@@ -447,6 +447,14 @@
             <option value="complex">complex</option>
           </select>
         </div>
+        <div class="filter-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Кол-во гаражей (Garages):</span>
+          <input type="number" id="pool-gar-min" placeholder="от" oninput="onPoolGar()" min="0"
+            style="width:64px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
+          <span style="font-size:11px;color:var(--text3)">–</span>
+          <input type="number" id="pool-gar-max" placeholder="до" oninput="onPoolGar()" min="0"
+            style="width:64px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);font-size:11px">
+        </div>
         <div class="filter-row" style="margin-bottom:8px;gap:4px;flex-wrap:wrap">
           <span style="font-size:10px;color:var(--text3);width:100%;margin-bottom:2px">Авто-сложность (Bot WR):</span>
           <button class="config-btn" onclick="setPoolFilter('wr','killer')"   id="pf-killer"    style="font-size:11px;padding:3px 7px">💀 Убийца</button>
@@ -1409,8 +1417,9 @@ function funnelInit() {
   else { draftFunnel = [...liveFunnel]; }
   // reset filters
   poolFilterType = ''; poolFilterWr.clear(); poolWrMin = 0; poolWrMax = 100;
-  poolFilterSubtype = ''; poolFilterComp = '';
+  poolFilterSubtype = ''; poolFilterComp = ''; poolGarMin = null; poolGarMax = null;
   ['pf-subtype','pf-comp'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['pool-gar-min','pool-gar-max'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   ['pf-killer','pf-vhard','pf-hard-wr','pf-normal-wr','pf-easy-wr','pf-izzy-wr'].forEach(id => document.getElementById(id)?.classList.remove('pf-active'));
   document.getElementById('pf-all')?.classList.add('pf-active');
   renderPool(); renderLiveFunnel(); renderDraftFunnel(); updateFunnelMetrics();
@@ -1422,10 +1431,18 @@ let poolFilterSubtype = '';
 let poolFilterComp = '';
 let poolWrMin = 0;    // 0–100
 let poolWrMax = 100;  // 0–100
+let poolGarMin = null, poolGarMax = null;  // garages count range (null = unbounded)
 
 function setPoolSelect(dim, val){
   if(dim==='subtype') poolFilterSubtype = val;
   if(dim==='comp')    poolFilterComp = val;
+  renderPool();
+}
+function onPoolGar(){
+  const mn = document.getElementById('pool-gar-min').value.trim();
+  const mx = document.getElementById('pool-gar-max').value.trim();
+  poolGarMin = (mn==='' || isNaN(parseFloat(mn))) ? null : parseFloat(mn);
+  poolGarMax = (mx==='' || isNaN(parseFloat(mx))) ? null : parseFloat(mx);
   renderPool();
 }
 
@@ -1507,6 +1524,12 @@ function renderPool() {
     if (poolFilterType && !(r.mechanics||[]).includes(poolFilterType)) return false;
     if (poolFilterSubtype && r.subtype !== poolFilterSubtype) return false;
     if (poolFilterComp && r.composition !== poolFilterComp) return false;
+    if (poolGarMin != null || poolGarMax != null) {   // garages-count range
+      const g = parseFloat(String(r.garages).replace(',','.'));
+      if (isNaN(g)) return false;
+      if (poolGarMin != null && g < poolGarMin) return false;
+      if (poolGarMax != null && g > poolGarMax) return false;
+    }
     if (r.botwr == null) { if (wrFilterActive) return false; }   // untested: only when no WR filter
     else if (useCats) { if (!cats.some(k => { const [a,b]=WR_RANGES[k]; return r.botwr>=a && r.botwr<b; })) return false; }
     else if (r.botwr < sliderMin || r.botwr > sliderMax) return false;
