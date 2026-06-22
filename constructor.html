@@ -336,7 +336,11 @@
     <span class="sync-status" id="sync-status"></span>
     <input type="text" id="quick-sheet-name" placeholder="Имя листа" value="Levels 6.0"
       style="font-size:12px;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);width:130px">
-    <button class="config-btn" id="user-name" onclick="setUserName()" title="Твоё имя — подпись к воронкам">👤 имя</button>
+    <select id="user-select" onchange="onUserSelect(this.value)" title="Кто ты — твой личный профиль (черновик, ориентиры, таргеты) синхронизируется между компами"
+      style="font-size:12px;padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text);max-width:170px">
+      <option value="">👤 гость</option>
+      <option value="__new__">➕ Новый пользователь…</option>
+    </select>
     <button class="config-btn" onclick="document.getElementById('config-overlay').classList.add('open')">⚙</button>
     <button class="sync-btn" id="sync-btn" onclick="syncSheets()">↻ Обновить</button>
   </div>
@@ -662,7 +666,7 @@ if(!localStorage.getItem('wq-funnel-diff')){
   if(old){ try{ funnelDiff = JSON.parse(old); localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff)); }catch(e){} }
 }
 function funnelDiffOf(r){ return funnelDiff[r.n] || r.diff; }   // effective difficulty inside the funnel
-function persistFunnelDiff(){ localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff)); }
+function persistFunnelDiff(){ localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff)); scheduleProfileSave(); }
 
 // Change a level's funnel difficulty (editable only in the funnel; never touches the imported value).
 function setDiffTag(n, value){
@@ -1333,7 +1337,7 @@ for(const k in funnelLandmarks){
     ? {t: it, c: it==='Сложный'?'#BA7517' : it==='Супер Сложный'?'#E24B4A' : ''}
     : it);
 }
-function persistLandmarks(){ localStorage.setItem('wq-funnel-landmarks', JSON.stringify(funnelLandmarks)); }
+function persistLandmarks(){ localStorage.setItem('wq-funnel-landmarks', JSON.stringify(funnelLandmarks)); scheduleProfileSave(); }
 
 const LM_PALETTE = ['#4a3fa8','#1D9E75','#BA7517','#E24B4A','#185FA5','#993556','#0E7C7B','#C77DBB','#E08A1E','#5B6770'];
 
@@ -1439,6 +1443,7 @@ function setTarget(pos, el){
   if(v === '' || isNaN(num)){ delete funnelTargets[pos]; const imp = targetForPos(pos); el.value = imp==null?'':imp; el.style.color = tgtColor(imp); }
   else { const t = Math.max(0, Math.min(100, Math.round(num))); funnelTargets[pos] = t; el.value = t; el.style.color = tgtColor(t); }
   localStorage.setItem('wq-funnel-targets', JSON.stringify(funnelTargets));
+  scheduleProfileSave();
   // no re-render — keep input focus for fast sequential entry
 }
 
@@ -1747,6 +1752,7 @@ function renderDraftFunnel() {
   const el = document.getElementById('funnel-draft');
   if (!el) return;
   localStorage.setItem('wq-draft-funnel', JSON.stringify(draftFunnel));   // auto-save draft order so it (and landmarks) survive reloads
+  scheduleProfileSave();   // also push to the logged-in user's profile (no-op for guest)
   const rowCount = Math.max(draftFunnel.length, scaffoldMax());
   if (rowCount === 0) {
     el.innerHTML = '<div class="drop-hint">Перетащи уровни сюда из банка<br>или нажми + на плашке уровня</div>';
@@ -1969,11 +1975,84 @@ let savedFunnels = JSON.parse(localStorage.getItem('wq-saved-funnels') || '[]');
 let userName = localStorage.getItem('wq-username') || '';
 let editingFunnelId = null;   // set when a saved funnel was opened via "Редактировать"
 
-function setUserName(){
-  const n = (prompt('Твоё имя (подпись к воронкам):', userName) || '').trim();
-  if(n){ userName = n; localStorage.setItem('wq-username', userName); const el=document.getElementById('user-name'); if(el) el.textContent = '👤 '+userName; }
+// ── Per-user profile (login-by-name): personal draft/landmarks/targets/diff sync across machines ──
+// No password — the name IS the identity. Stored server-side in KV via /api/profile.
+// localStorage stays as an offline cache of whatever the current user last had.
+let profileLoading = false;     // guards against save-on-load echo
+let profileSaveTimer = null;
+
+async function apiProfile(method, user, body){
+  const url = '/api/profile' + (user ? '?user='+encodeURIComponent(user) : '');
+  const opts = { method };
+  if(body && method==='POST'){ opts.headers={'Content-Type':'application/json'}; opts.body=JSON.stringify(body); }
+  const resp = await fetch(url, opts);
+  if(!resp.ok) throw new Error('profile '+resp.status);
+  return resp.json();
 }
-function ensureUserName(){ if(!userName) setUserName(); return userName; }
+async function loadUserList(){
+  let names = [];
+  try { const l = await apiProfile('GET'); if(Array.isArray(l)) names = l; } catch(e){}
+  const sel = document.getElementById('user-select'); if(!sel) return;
+  const cur = userName;
+  sel.innerHTML = '<option value="">👤 гость</option>'
+    + names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">👤 ${n}</option>`).join('')
+    + '<option value="__new__">➕ Новый пользователь…</option>';
+  sel.value = names.includes(cur) ? cur : '';
+}
+function onUserSelect(v){
+  if(v==='__new__'){
+    const n = (prompt('Имя нового пользователя:') || '').trim();
+    if(!n){ const sel=document.getElementById('user-select'); if(sel) sel.value = userName||''; return; }
+    switchUser(n, true);
+  } else {
+    switchUser(v, false);
+  }
+}
+async function switchUser(name, isNew){
+  userName = name;
+  localStorage.setItem('wq-username', userName);
+  if(name){
+    await loadProfile(name);                 // pull this user's workspace from the server
+    if(isNew){ await loadUserList(); saveProfileNow(); }   // register the new user immediately
+  }
+  const sel=document.getElementById('user-select'); if(sel) sel.value = name||'';
+}
+// Pull a user's stored workspace and hydrate the live state + localStorage cache.
+async function loadProfile(name){
+  let p = {};
+  try { p = await apiProfile('GET', name) || {}; } catch(e){ return; }
+  profileLoading = true;
+  funnelDiff      = p.diff      && typeof p.diff==='object'      ? p.diff      : {};
+  funnelLandmarks = p.landmarks && typeof p.landmarks==='object' ? p.landmarks : {};
+  funnelTargets   = p.targets   && typeof p.targets==='object'   ? p.targets   : {};
+  draftFunnel     = Array.isArray(p.draft) ? p.draft.filter(n=>LEVELS.some(l=>l.n===n)) : [];
+  localStorage.setItem('wq-funnel-diff', JSON.stringify(funnelDiff));
+  localStorage.setItem('wq-funnel-landmarks', JSON.stringify(funnelLandmarks));
+  localStorage.setItem('wq-funnel-targets', JSON.stringify(funnelTargets));
+  localStorage.setItem('wq-draft-funnel', JSON.stringify(draftFunnel));
+  try { renderPool(); renderDraftFunnel(); renderLevels(); } catch(e){}
+  profileLoading = false;
+}
+// Debounced push of the current personal workspace to the server (no-op for guest).
+function scheduleProfileSave(){
+  if(profileLoading || !userName) return;
+  clearTimeout(profileSaveTimer);
+  profileSaveTimer = setTimeout(saveProfileNow, 800);
+}
+function saveProfileNow(){
+  if(!userName) return;
+  apiProfile('POST', userName, {
+    draft: [...draftFunnel], diff: {...funnelDiff},
+    landmarks: JSON.parse(JSON.stringify(funnelLandmarks)), targets: {...funnelTargets},
+  }).catch(()=>{});
+}
+function ensureUserName(){
+  if(!userName){
+    const n = (prompt('Твоё имя (подпись к воронкам):', '') || '').trim();
+    if(n) switchUser(n, true);
+  }
+  return userName;
+}
 
 async function apiFunnels(method, body){
   const url = '/api/funnels' + (method==='DELETE' && body && body.id ? '?id='+encodeURIComponent(body.id) : '');
@@ -2161,7 +2240,7 @@ function clearLandmarks(){ if(!confirm('Очистить все ориентир
 rebuildSavedFunnelTabs();   // show cached funnels instantly
 loadSavedFunnels();         // then refresh from shared KV store
 loadShots();                // fetch available level screenshots (deployed only)
-{ const el=document.getElementById('user-name'); if(el && userName) el.textContent='👤 '+userName; }
+loadUserList().then(()=>{ if(userName) loadProfile(userName); });   // populate user picker, hydrate the logged-in user's workspace
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeShot(); });
 </script>
 </body>
